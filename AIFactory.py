@@ -6,77 +6,17 @@ import unittest
 
 
 class Builder(ABC):
-    # register you new builder_type here.
-    ESTIMATOR = 'estimator'
-    OPTIMIZER = 'optimizer'
-    DATA_MODEL = 'data_model'
 
-    @property
     @abstractmethod
-    def required_specifications(self) -> dict:
+    def valid(self) -> bool:
         pass
-
-    @property
-    @abstractmethod
-    def optional_specifications(self) -> dict:
-        pass
-
-    @property
-    @abstractmethod
-    def dependent_on(self) -> list:
-        pass
-
-    @property
-    @abstractmethod
-    def ingredient_type(self) -> str:
-        pass
-
-    def accepts(self, ingredient_type: str) -> bool:
-        return self.ingredient_type is ingredient_type
-
-    def validate(self, recipe: AIRecipe):
-        specifications = recipe.get_ingredient_specification(self.ingredient_type)
-
-        if specifications is None:
-            raise RuntimeError('Specifications for {} missing.'.format(__class__))
-
-        self._load_required_specifications(specifications=specifications)
-        self._load_optional_specification(specifications=specifications)
-
-    def _load_optional_specification(self, specifications: dict):
-        for optional_specification, specification_format in self.optional_specifications.items():
-            if optional_specification not in specifications:
-                continue
-
-            value = specifications[optional_specification]
-            self._validate_specification_format(value, optional_specification, specification_format)
-
-    def _load_required_specifications(self, specifications: dict):
-        for required_specification, specification_format in self.required_specifications.items():
-            if required_specification not in specifications:
-                raise RuntimeError('Required specification {} is missing.'.format(required_specification))
-
-            value = specifications[required_specification]
-            self._validate_specification_format(value, required_specification, specification_format)
-
-    def _validate_specification_format(self, value, specification: str, specification_format):
-        if isinstance(specification_format, list):
-            if value in specification_format:
-                return
-
-            raise RuntimeError('unknown value ({}) passed to {} specification in {} of {} builder'
-                               .format(value, specification, self.ingredient_type, self.ingredient_type))
-
-        if value is None or type(value) is not specification_format:
-            raise RuntimeError('{} is missing specification value is {} in stead of {}.'
-                               .format(self.ingredient_type, type(value), specification_format))
 
     @abstractmethod
     def build(self, neural_net: AI, recipe: AIRecipe):
         pass
 
 
-class DataBuilder(Builder):
+class DataBuilder(Builder, ABC):
     """
      format
     'data': {
