@@ -304,33 +304,5 @@ class DataLoader:
         self._ml_data_model = dataset
 
 
-# class Converter:
-#     _data_model: DataModel
-#
-#     def __init__(self, dataset: DataModel):
-#         """
-#
-#         :param dataset:
-#         """
-#         self._data_model = dataset
-#
-#     def insert_new_column(self, new_column: str, convert_fn):
-#         """
-#
-#         :param new_column:
-#         :param convert_fn:
-#         """
-#         dataframe = self._data_model.get_dataframe()
-#         dataframe[new_column] = dataframe.apply(convert_fn, axis=1)
-#
-#     def replace_missing_data_with_category(self, columns: list, missing_category_name: str):
-#         self._data_model.validate_columns(columns)
-#         dataframe = self._data_model.get_dataframe()
-#         dataframe[columns] = dataframe[columns].fillna(missing_category_name)
-#
-#     def get_dataset(self):
-#         return self._data_model
-
-
 if __name__ == '__main__':
     unittest.main()

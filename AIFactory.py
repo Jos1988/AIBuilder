@@ -9,6 +9,7 @@ class Builder(ABC):
     # register you new builder_type here.
     ESTIMATOR = 'estimator'
     OPTIMIZER = 'optimizer'
+    DATA_MODEL = 'data_model'
 
     @property
     @abstractmethod
@@ -59,23 +60,88 @@ class Builder(ABC):
             self._validate_specification_format(value, required_specification, specification_format)
 
     def _validate_specification_format(self, value, specification: str, specification_format):
-            if isinstance(specification_format, list):
-                if value in specification_format:
-                    return
+        if isinstance(specification_format, list):
+            if value in specification_format:
+                return
 
-                raise RuntimeError('unknown value ({}) passed to {} specification in {} of {} builder'
-                                   .format(value, specification, self.ingredient_type, self.ingredient_type))
+            raise RuntimeError('unknown value ({}) passed to {} specification in {} of {} builder'
+                               .format(value, specification, self.ingredient_type, self.ingredient_type))
 
-            if value is None or type(value) is not specification_format:
-                raise RuntimeError('{} is missing specification value is {} in stead of {}.'
-                                   .format(self.ingredient_type, type(value), specification_format))
+        if value is None or type(value) is not specification_format:
+            raise RuntimeError('{} is missing specification value is {} in stead of {}.'
+                               .format(self.ingredient_type, type(value), specification_format))
 
     @abstractmethod
     def build(self, neural_net: AI, recipe: AIRecipe):
         pass
 
 
+class DataBuilder(Builder):
+    """
+     format
+    'data': {
+      'data_source: string
+      'feature_columns': [{name: string, 'type': 'categorical_column_with_vocabulary_list'}]
+      target_column: string
+    }
+    """
+
+    @property
+    def required_specifications(self) -> dict:
+        return {'data_source': str, 'feature_columns': [{'name': str, 'type': str}], 'target_column': str}
+
+    @property
+    def optional_specifications(self) -> dict:
+        return {}
+
+    @property
+    def dependent_on(self) -> list:
+        return []
+
+    @property
+    def ingredient_type(self) -> str:
+        return 'data'
+
+    def build(self, neural_net: AI, recipe: AIRecipe):
+        pass
+
+    # Load data.
+    # loader = Data.DataLoader()
+    # loader.load_csv('data/7210_1.csv')
+    # loader.filter_columns(
+    #     [
+    #         'brand',
+    #         'manufacturer',
+    #         'categories',
+    #         'colors',
+    #         'name',
+    #         'prices.amountMin',
+    #         'prices.amountMax',
+    #         'prices.currency',
+    #         'prices.dateSeen'
+    #     ]
+    # )
+    #
+    # data_model = loader.get_dataset()
+    #
+    # ml_dataset.set_target_column('prices.target')
+    # ml_dataset.set_tf_feature_columns([
+    #     tf.feature_column.categorical_column_with_vocabulary_list(
+    #         'brand',
+    #         vocabulary_list=ml_dataset.get_all_column_categories('brand')
+    #     ),
+    #     tf.feature_column.categorical_column_with_vocabulary_list(
+    #         'manufacturer',
+    #         vocabulary_list=ml_dataset.get_all_column_categories('manufacturer')
+    #     )
+    # ])
+
+
 class EstimatorBuilder(Builder):
+    # format:
+    # 'estimator':
+    # 'type' : 'linear_regressor'
+
     ESTIMATOR_TYPE = 'type'
     LINEAR_REGRESSOR_TYPE = 'linear_regressor'
 
@@ -89,7 +155,7 @@ class EstimatorBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.OPTIMIZER]
+        return [self.OPTIMIZER, self.DATA_MODEL]
 
     @property
     def ingredient_type(self) -> str:
@@ -97,7 +163,7 @@ class EstimatorBuilder(Builder):
 
     def build(self, neural_net: AI, recipe: AIRecipe):
         specifications = recipe.get_ingredient_specification(self.ingredient_type)
-        regressor_type = specifications[self.ESTIMATOR]
+        regressor_type = specifications[self.ESTIMATOR_TYPE]
 
         if regressor_type is self.LINEAR_REGRESSOR_TYPE:
             regressor = tf.estimator.LinearRegressor(
@@ -141,6 +207,12 @@ class TestEstimatorBuilder(unittest.TestCase):
 
 
 class OptimizerBuilder(Builder):
+    # format:
+    # 'optimizer' :
+    # 'type': 'gradient_descent_optimizer'
+    # 'learning_rate' : float
+    # (optional)'gradient_clipping' : float
+
     LEARNING_RATE = 'learning_rate'
     GRADIENT_CLIPPING = 'gradient_clipping'
 
@@ -248,26 +320,27 @@ class TestOptimizerBuilder(unittest.TestCase):
 class AIFactory:
     def __init__(self):
         self.AIBuilders = []
-        # load Decorators
-        # self.AIDecorators.append(AIDecorator())
-        # ...
+        # load you Builders here instead of using DI
+        self.AIBuilders.append(EstimatorBuilder())
+        self.AIBuilders.append(OptimizerBuilder())
+
+        self.required_builders = []
 
     def create_AI(self, recipe: AIRecipe) -> AI:
         artificial_intelligence = AI()
-        required_builders = []
 
         ingredient_types = recipe.get_ingredient_types()
 
         for ingredient_type in ingredient_types:
             builder = self.get_builder(ingredient_type)
-            required_builders.append(builder)
+            self.required_builders.append(builder)
 
-        for builder in required_builders:
+        for builder in self.required_builders:
             builder.validate(recipe)
 
-        # sort builders
+        # self.sortBuilders()
 
-        for builder in required_builders:
+        for builder in self.required_builders:
             builder.build(artificial_intelligence, recipe)
 
         return artificial_intelligence
@@ -278,10 +351,38 @@ class AIFactory:
             if decorator.accepts(ingredient_type):
                 valid_decorators.append(decorator)
 
-        if valid_decorators.count() is 1:
+        if len(valid_decorators) is 1:
             return valid_decorators.pop()
 
-        raise RuntimeError('{} decorators found for ingredient: {}'.format(valid_decorators.count(), ingredient_type))
+        raise RuntimeError('{} decorators found for ingredient: {}'.format(len(valid_decorators), ingredient_type))
+
+    def sortBuilders(self, builders: list):
+        pass
+
+
+class TestAIFactory(unittest.TestCase):
+
+    def setUp(self):
+        self.factory = AIFactory()
+
+    # def test_create_AI(self):
+    #     # 'type': 'gradient_descent_optimizer'
+    #     # 'learning_rate' : float
+    #     # (optional)'gradient_clipping' : float
+    #
+    #     # 'estimator':
+    #     # 'type' : 'linear_regressor'
+    #
+    #     # todo add datamodel builder as optimizerbuilder depends on it.
+    #     recipe = AIRecipe({
+    #         'estimator': {'type': 'linear_regressor'},
+    #         'optimizer': {'type': 'gradient_descent_optimizer', 'learning_rate': 0.0002, 'gradient_clipping': 5.0}
+    #     })
+    #
+    #     artie = self.factory.create_AI(recipe=recipe)
+    #     print(type(artie.optimizer))
+    #     print(type(artie.estimator))
+    #     print(artie)
 
 
 if __name__ == '__main__':

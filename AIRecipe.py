@@ -2,6 +2,20 @@ import unittest
 from abc import ABC, abstractmethod
 
 
+class AIIngredient:
+    def __init__(self, name: str, value_type, ):
+        self.name = name
+        self.value_type = value_type
+
+
+class TestIngredient(unittest.TestCase):
+
+    def test_set_ingredient(self):
+        ingredient = AIIngredient('type', str)
+        self.assertEqual(ingredient.name, 'type')
+        self.assertEqual(ingredient.value_type, str)
+
+
 class AIRecipe:
     def __init__(self, ingredients: dict):
         self.ingredients = ingredients
@@ -26,7 +40,7 @@ class AIRecipe:
         return None
 
 
-class TestIngredient(unittest.TestCase):
+class TestRecipe(unittest.TestCase):
 
     def setUp(self):
         self.recipe_description = {
@@ -36,10 +50,11 @@ class TestIngredient(unittest.TestCase):
             'sauce': 'brown game stock'
         }
 
-        self.recipe = AIRecipe(self.recipe_description)
+        self.recipe = AIRecipe(datamodel='model', estimator=estimator)
+        self.recipe.add('optimizer', 'optimizer_name')
 
     def test_get_ingredients_type(self):
-        expected = ['spices', 'meat', 'sauce', 'filling']
+        expected = ['datamodel', 'optimizer', 'estimator']
         types = self.recipe.get_ingredient_types()
 
         self.assertCountEqual(expected, types, 'Expected ingredient types do not match.')
@@ -48,7 +63,7 @@ class TestIngredient(unittest.TestCase):
         self.assertEqual(self.recipe_description, self.recipe.get_ingredients())
 
     def test_add_ingredient(self):
-        self.recipe.add_ingredient('garnish', 'parsley')
+        self.recipe.add('garnish', 'parsley')
         specification = self.recipe.ingredients['garnish']
 
         self.assertEqual('parsley', specification)
