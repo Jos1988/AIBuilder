@@ -3,12 +3,27 @@ from AIBuilder.AI import AI
 from abc import ABC, abstractmethod
 import tensorflow as tf
 import unittest
+from typing import Optional, Union
 
 
 class Builder(ABC):
+    # register you new builder_type here.
+    ESTIMATOR = 'estimator'
+    OPTIMIZER = 'optimizer'
+    DATA_MODEL = 'data_model'
+
+    @property
+    @abstractmethod
+    def dependent_on(self) -> list:
+        pass
+
+    @property
+    @abstractmethod
+    def ingredient_type(self) -> str:
+        pass
 
     @abstractmethod
-    def valid(self) -> bool:
+    def validate(self) -> bool:
         pass
 
     @abstractmethod
@@ -40,7 +55,7 @@ class DataBuilder(Builder, ABC):
 
     @property
     def ingredient_type(self) -> str:
-        return 'data'
+        return self.DATA_MODEL
 
     def build(self, neural_net: AI, recipe: AIRecipe):
         pass
@@ -78,20 +93,13 @@ class DataBuilder(Builder, ABC):
 
 
 class EstimatorBuilder(Builder):
-    # format:
-    # 'estimator':
-    # 'type' : 'linear_regressor'
+    LINEAR_REGRESSOR = 'linear_regressor'
+    valid_estimator_types = [LINEAR_REGRESSOR]
+    estimator: str
 
-    ESTIMATOR_TYPE = 'type'
-    LINEAR_REGRESSOR_TYPE = 'linear_regressor'
-
-    @property
-    def required_specifications(self) -> dict:
-        return {self.ESTIMATOR_TYPE: [self.LINEAR_REGRESSOR_TYPE]}
-
-    @property
-    def optional_specifications(self) -> dict:
-        return {}
+    def __init__(self, estimator_type: str):
+        self.estimator_type = None
+        self.set_estimator(estimator_type)
 
     @property
     def dependent_on(self) -> list:
@@ -101,17 +109,26 @@ class EstimatorBuilder(Builder):
     def ingredient_type(self) -> str:
         return self.ESTIMATOR
 
-    def build(self, neural_net: AI, recipe: AIRecipe):
-        specifications = recipe.get_ingredient_specification(self.ingredient_type)
-        regressor_type = specifications[self.ESTIMATOR_TYPE]
+    def set_estimator(self, estimator_type):
+        self.validate_estimator(estimator_type)
+        self.estimator_type = estimator_type
 
-        if regressor_type is self.LINEAR_REGRESSOR_TYPE:
-            regressor = tf.estimator.LinearRegressor(
+    def validate_estimator(self, estimator_type: str):
+        assert estimator_type in self.valid_estimator_types, 'Unknown type of estimator {}, must be in {}'.format(
+            estimator_type, self.valid_estimator_types)
+
+    def validate(self) -> bool:
+        self.validate_estimator(self.estimator_type)
+        return True
+
+    def build(self, neural_net: AI, recipe: AIRecipe):
+        if self.estimator_type is self.LINEAR_REGRESSOR:
+            estimator = tf.estimator.LinearRegressor(
                 feature_columns=neural_net.training_data.get_tf_feature_columns(),
                 optimizer=neural_net.optimizer
             )
 
-            neural_net.set_estimator(regressor)
+            neural_net.set_estimator(estimator)
             return
 
         raise RuntimeError('Estimator Builder failed to set estimator.')
@@ -119,54 +136,42 @@ class EstimatorBuilder(Builder):
 
 class TestEstimatorBuilder(unittest.TestCase):
 
-    def setUp(self):
-        self.builder = EstimatorBuilder()
-
     def test_validate(self):
-        recipe = AIRecipe({self.builder.ESTIMATOR: {
-            self.builder.ESTIMATOR_TYPE: self.builder.LINEAR_REGRESSOR_TYPE
-        }})
+        estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        estimator_builder.validate()
 
-        self.builder.validate(recipe)
+    def test_invalid_estimator_type(self):
+        invalid_estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        invalid_estimator_builder.estimator_type = 'invalid'
 
-    def test_invalid_specifications(self):
-        recipe = AIRecipe({self.builder.ESTIMATOR: {
-            self.builder.ESTIMATOR_TYPE: 'invalid'
-        }})
+        valid_estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
 
-        with self.assertRaises(RuntimeError):
-            self.builder.validate(recipe)
+        with self.assertRaises(AssertionError):
+            invalid_estimator_builder.validate()
 
-    def test_missing_specifications(self):
-        recipe = AIRecipe({'invalid': {
-            self.builder.ESTIMATOR_TYPE: self.builder.LINEAR_REGRESSOR_TYPE
-        }})
+        with self.assertRaises(AssertionError):
+            valid_estimator_builder.set_estimator('invalid')
 
-        with self.assertRaises(RuntimeError):
-            self.builder.validate(recipe)
+        with self.assertRaises(AssertionError):
+            EstimatorBuilder('invalid')
+
+    def test_build(self):
+        pass
 
 
 class OptimizerBuilder(Builder):
-    # format:
-    # 'optimizer' :
-    # 'type': 'gradient_descent_optimizer'
-    # 'learning_rate' : float
-    # (optional)'gradient_clipping' : float
-
     LEARNING_RATE = 'learning_rate'
     GRADIENT_CLIPPING = 'gradient_clipping'
 
-    OPTIMIZER_TYPE = 'type'
     GRADIENT_DESCENT_OPTIMIZER = 'gradient_descent_optimizer'
 
-    @property
-    def required_specifications(self) -> dict:
-        return {self.LEARNING_RATE: float,
-                self.OPTIMIZER_TYPE: [self.GRADIENT_DESCENT_OPTIMIZER]}
+    valid_optimizer_types = [GRADIENT_DESCENT_OPTIMIZER]
 
-    @property
-    def optional_specifications(self) -> dict:
-        return {self.GRADIENT_CLIPPING: float}
+    def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[float] = None):
+        self.validate_optimizer_type(optimizer_type)
+        self.optimizer_type = optimizer_type
+        self.learning_rate = learning_rate
+        self.gradient_clipping = gradient_clipping
 
     @property
     def dependent_on(self) -> list:
@@ -176,22 +181,24 @@ class OptimizerBuilder(Builder):
     def ingredient_type(self) -> str:
         return self.OPTIMIZER
 
+    def validate(self) -> bool:
+        assert self.learning_rate is not float, 'optimizer learning rate must be float, currently: {}'.format(
+            self.learning_rate)
+
+        self.validate_optimizer_type(self.optimizer_type)
+
+        assert type(self.gradient_clipping) is float or self.gradient_clipping is None, \
+            'gradient clipping must be float or None, currently {}'.format(self.gradient_clipping)
+
     def build(self, neural_net: AI, recipe: AIRecipe):
-        specification = recipe.get_ingredient_specification(self.ingredient_type)
-        learning_rate = specification[self.LEARNING_RATE]
-        optimizer_type = specification[self.OPTIMIZER_TYPE]
-        clipping = None
-        if specification[self.GRADIENT_CLIPPING] is not None:
-            clipping = specification[self.GRADIENT_CLIPPING]
+        my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type, learning_rate=self.learning_rate)
 
-        my_optimizer = self._set_optimizer(optimizer_type=optimizer_type, learning_rate=learning_rate)
-
-        if clipping is not None:
-            my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, clipping)
+        if self.gradient_clipping is not None:
+            my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, self.gradient_clipping)
 
         neural_net.set_optimizer(my_optimizer)
 
-    def _set_optimizer(self, optimizer_type: str, learning_rate: int):
+    def _set_optimizer(self, optimizer_type: str, learning_rate: float) -> tf.train.Optimizer:
         if optimizer_type is self.GRADIENT_DESCENT_OPTIMIZER:
             my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
 
@@ -199,62 +206,45 @@ class OptimizerBuilder(Builder):
 
         raise RuntimeError('Optimizer not set.')
 
+    def validate_optimizer_type(self, optimizer_type: str):
+        assert optimizer_type in self.valid_optimizer_types, 'Unknown type op optimizer {}, must be in {}'.format(
+            optimizer_type, self.valid_optimizer_types)
+
 
 class TestOptimizerBuilder(unittest.TestCase):
 
-    def setUp(self):
-        self.builder = OptimizerBuilder()
+    def test_valid_validate(self):
+        optimizer_builder_no_clipping = OptimizerBuilder(
+            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            learning_rate=1.0)
 
-    def test_validate(self):
-        recipe_with_clipping = AIRecipe({self.builder.OPTIMIZER: {
-            self.builder.OPTIMIZER_TYPE: self.builder.GRADIENT_DESCENT_OPTIMIZER,
-            self.builder.GRADIENT_CLIPPING: 5.0,
-            self.builder.LEARNING_RATE: 0.0002
-        }})
+        optimizer_builder_with_clipping = OptimizerBuilder(
+            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            learning_rate=1.0,
+            gradient_clipping=1.0)
 
-        recipe_no_clipping = AIRecipe({self.builder.OPTIMIZER: {
-            self.builder.OPTIMIZER_TYPE: self.builder.GRADIENT_DESCENT_OPTIMIZER,
-            self.builder.LEARNING_RATE: 0.0002
-        }})
+        optimizer_builder_no_clipping.validate()
+        optimizer_builder_with_clipping.validate()
 
-        self.builder.validate(recipe_with_clipping)
-        self.builder.validate(recipe_no_clipping)
+    def test_invalid_validate(self):
+        with self.assertRaises(AssertionError):
+            OptimizerBuilder(
+                optimizer_type='invalid',
+                learning_rate=5.0,
+                gradient_clipping=0.0002)
 
-    def test_invalid_specifications(self):
-        recipe_invalid_type = AIRecipe({self.builder.ESTIMATOR: {
-            self.builder.OPTIMIZER_TYPE: 'invalid',
-            self.builder.GRADIENT_CLIPPING: 5.0,
-            self.builder.LEARNING_RATE: 0.0002
-        }})
+        optimizer_builder = OptimizerBuilder(
+            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            learning_rate=0.1,
+            gradient_clipping=0.0002)
 
-        recipe_invalid_clipping = AIRecipe({self.builder.ESTIMATOR: {
-            self.builder.OPTIMIZER_TYPE: self.builder.GRADIENT_DESCENT_OPTIMIZER,
-            self.builder.GRADIENT_CLIPPING: 'invalid',
-            self.builder.LEARNING_RATE: 0.0002
-        }})
+        optimizer_builder.optimizer_type = 'invalid'
 
-        recipe_invalid_learning_rate = AIRecipe({self.builder.ESTIMATOR: {
-            self.builder.OPTIMIZER_TYPE: self.builder.GRADIENT_DESCENT_OPTIMIZER,
-            self.builder.GRADIENT_CLIPPING: 5.0,
-            self.builder.LEARNING_RATE: 1
-        }})
+        with self.assertRaises(AssertionError):
+            optimizer_builder.validate()
 
-        with self.assertRaises(RuntimeError):
-            self.builder.validate(recipe_invalid_type)
-
-        with self.assertRaises(RuntimeError):
-            self.builder.validate(recipe_invalid_clipping)
-
-        with self.assertRaises(RuntimeError):
-            self.builder.validate(recipe_invalid_learning_rate)
-
-    def test_missing_specifications(self):
-        recipe = AIRecipe({'invalid': {
-            self.builder.OPTIMIZER_TYPE: self.builder.GRADIENT_DESCENT_OPTIMIZER
-        }})
-
-        with self.assertRaises(RuntimeError):
-            self.builder.validate(recipe)
+    def test_build(self):
+        pass
 
 
 class AIFactory:
