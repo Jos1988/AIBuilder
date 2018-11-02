@@ -139,6 +139,8 @@ class DataModel:
                 raise RuntimeError("'{}' not in dataset.".format(name))
 
     def get_all_column_categories(self, column: str):
+        assert column in self._dataframe, 'Column {} not in data frame.'.format(column)
+
         return self._dataframe[column].unique().tolist()
 
     def set_tf_feature_columns(self, feature_columns: list):
@@ -206,7 +208,7 @@ class DataSetSplitter:
     def __init__(self, data_model: DataModel):
         self._data_model = data_model
 
-    def split_by_ratio(self, ratios: list):
+    def split_by_ratio(self, ratios: list) -> list:
         model_data = self._data_model.get_dataframe()
 
         ratios = np.array(ratios)
@@ -265,19 +267,12 @@ class DataLoader:
     _ml_data_model = DataModel
     _conserve_memory = False
 
-    def __init__(self, conserve_memory: bool = False):
-        """
-
-        :param conserve_memory: bool
-        """
-        self._conserve_memory = conserve_memory
-
     def load_csv(self, path: str):
         """
 
         :param path: str
         """
-        dataframe = pd.read_csv(path, low_memory=self._conserve_memory)
+        dataframe = pd.read_csv(path)
         self._ml_data_model = DataModel(dataframe)
 
     def filter_columns(self, columns: list):

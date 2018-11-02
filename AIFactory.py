@@ -1,9 +1,10 @@
 from AIBuilder.AIRecipe import AIRecipe
 from AIBuilder.AI import AI
+from AIBuilder.Data import DataModel, DataSetSplitter, DataLoader
 from abc import ABC, abstractmethod
 import tensorflow as tf
 import unittest
-from typing import Optional, Union
+from typing import Optional
 
 
 class Builder(ABC):
@@ -23,31 +24,27 @@ class Builder(ABC):
         pass
 
     @abstractmethod
-    def validate(self) -> bool:
+    def validate(self):
         pass
 
     @abstractmethod
-    def build(self, neural_net: AI, recipe: AIRecipe):
+    def build(self, neural_net: AI):
         pass
 
 
-class DataBuilder(Builder, ABC):
-    """
-     format
-    'data': {
-      'data_source: string
-      'feature_columns': [{name: string, 'type': 'categorical_column_with_vocabulary_list'}]
-      target_column: string
-    }
-    """
+class DataBuilder(Builder):
+    CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
+    NUMERICAL_COLUMN = 'numeric_column'
+    valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
 
-    @property
-    def required_specifications(self) -> dict:
-        return {'data_source': str, 'feature_columns': [{'name': str, 'type': str}], 'target_column': str}
-
-    @property
-    def optional_specifications(self) -> dict:
-        return {}
+    def __init__(self, data_source: str, target_column: str, validation_data_percentage: int):
+        self.validation_data_percentage = validation_data_percentage
+        self.training_data_percentage = 100 - self.validation_data_percentage
+        self.data_source = data_source
+        self.target_column = target_column
+        self.feature_columns = []
+        self.test_data = None
+        self.validation_data = None
 
     @property
     def dependent_on(self) -> list:
@@ -57,39 +54,140 @@ class DataBuilder(Builder, ABC):
     def ingredient_type(self) -> str:
         return self.DATA_MODEL
 
-    def build(self, neural_net: AI, recipe: AIRecipe):
-        pass
+    def add_feature_column(self, name: str, column_type: str):
+        self.is_valid_column_type(column_type)
+        self.feature_columns.append({'name': name, 'type': column_type})
 
-    # Load data.
-    # loader = Data.DataLoader()
-    # loader.load_csv('data/7210_1.csv')
-    # loader.filter_columns(
-    #     [
-    #         'brand',
-    #         'manufacturer',
-    #         'categories',
-    #         'colors',
-    #         'name',
-    #         'prices.amountMin',
-    #         'prices.amountMax',
-    #         'prices.currency',
-    #         'prices.dateSeen'
-    #     ]
-    # )
-    #
-    # data_model = loader.get_dataset()
-    #
-    # ml_dataset.set_target_column('prices.target')
-    # ml_dataset.set_tf_feature_columns([
-    #     tf.feature_column.categorical_column_with_vocabulary_list(
-    #         'brand',
-    #         vocabulary_list=ml_dataset.get_all_column_categories('brand')
-    #     ),
-    #     tf.feature_column.categorical_column_with_vocabulary_list(
-    #         'manufacturer',
-    #         vocabulary_list=ml_dataset.get_all_column_categories('manufacturer')
-    #     )
-    # ])
+    def validate(self):
+        assert type(self.validation_data_percentage) is int, 'Invalid validation data percentage, {}.'.format(
+            self.validation_data_percentage)
+
+        assert 0 < self.validation_data_percentage < 100, 'validation data perc. must be between 0 and 100, {} given'.format(
+            self.validation_data_percentage)
+
+        assert type(self.data_source) is str, 'Invalid data source for data model, {}.'.format(self.data_source)
+
+        assert type(self.target_column) is str, 'Invalid target column name set, {}'.format(self.target_column)
+
+        assert self.target_column not in self.get_feature_column_names(), \
+            'target column {}, also set as feature column!'.format(self.target_column)
+
+        assert type(self.feature_columns) is list, 'Invalid list of feature columns set, {}.'.format(
+            self.feature_columns)
+
+        assert len(self.feature_columns) is not 0, 'No feature columns provided!'
+
+        for feature_column in self.feature_columns:
+            self.is_valid_column_type(feature_column['type'])
+            assert type(feature_column['name']) is str, 'Invalid feature column name, {}'.format(feature_column)
+
+        for feature_column in self.feature_columns:
+            self.is_valid_column_type(feature_column['type'])
+
+    def build(self, ai: AI):
+        data = self.load_data()
+        data.set_target_column(self.target_column)
+
+        feature_columns = self.render_tf_feature_columns(data=data)
+        data.set_tf_feature_columns(feature_columns)
+
+        split_data = self.split_validation_and_test_data(data=data)
+        ai.set_validation_data(split_data['validation_data'])
+        ai.set_training_data(split_data['training_data'])
+
+    def load_data(self) -> DataModel:
+        loader = DataLoader()
+
+        self.load_file(loader)
+
+        columns = self.get_feature_column_names()
+        columns.append(self.target_column)
+
+        loader.filter_columns(columns)
+
+        return loader.get_dataset()
+
+    def load_file(self, loader: DataLoader):
+        if 'csv' in self.data_source:
+            loader.load_csv(self.data_source)
+            return
+
+        raise RuntimeError('Failed to load data from {}.'.format(self.data_source))
+
+    def get_feature_column_names(self) -> list:
+        names = []
+        for feature_column in self.feature_columns:
+            names.append(feature_column['name'])
+
+        return names
+
+    def split_validation_and_test_data(self, data: DataModel):
+        splitter = DataSetSplitter(data_model=data)
+        result = splitter.split_by_ratio([self.training_data_percentage, self.validation_data_percentage])
+
+        return {'training_data': result[0], 'validation_data': result[1]}
+
+    def is_valid_column_type(self, column_type: str):
+        assert column_type in self.valid_column_types, 'feature column type ({}) not valid, should be in {}'.format(
+            column_type, self.valid_column_types)
+
+    def render_tf_feature_columns(self, data: DataModel) -> list:
+        tf_feature_columns = []
+        for feature_column in self.feature_columns:
+            column = None
+            if feature_column['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
+                column = self.build_categorical_column_voc_list(feature_column, data)
+            elif feature_column['type'] is self.NUMERICAL_COLUMN:
+                column = self.build_numerical_column(feature_column['name'])
+
+            if column is None:
+                raise RuntimeError('feature column not set, ({})'.format(feature_column))
+
+            tf_feature_columns.append(column)
+
+        return tf_feature_columns
+
+    @staticmethod
+    def build_numerical_column(feature_column: dict) -> tf.feature_column.numeric_column:
+        return tf.feature_column.numeric_column(feature_column)
+
+    @staticmethod
+    def build_categorical_column_voc_list(
+            feature_column_data: dict,
+            data: DataModel
+    ) -> tf.feature_column.categorical_column_with_vocabulary_list:
+
+        return tf.feature_column.categorical_column_with_vocabulary_list(
+            feature_column_data['name'],
+            vocabulary_list=data.get_all_column_categories(feature_column_data['name'])
+        )
+
+
+class TestDataBuilder(unittest.TestCase):
+
+    def test_build(self):
+        data_builder = DataBuilder(data_source='../data/test_data.csv',
+                                   target_column='target_1',
+                                   validation_data_percentage=20)
+
+        data_builder.add_feature_column(name='feature_1', column_type=DataBuilder.CATEGORICAL_COLUMN_VOC_LIST)
+        data_builder.add_feature_column(name='feature_2', column_type=DataBuilder.NUMERICAL_COLUMN)
+        data_builder.add_feature_column(name='feature_3', column_type=DataBuilder.NUMERICAL_COLUMN)
+
+        arti = AI()
+        data_builder.validate()
+        data_builder.build(ai=arti)
+
+        feature_names = ['feature_1', 'feature_2', 'feature_3']
+        self.validate_data_frame(arti.training_data, feature_names)
+        self.validate_data_frame(arti.validation_data, feature_names)
+
+    def validate_data_frame(self, data_frame: DataModel, feature_name_list: list):
+        self.assertEqual(data_frame.feature_columns_names, feature_name_list)
+        self.assertEqual(data_frame.target_column_name, 'target_1')
+
+        for tf_feature_column in data_frame.get_tf_feature_columns():
+            self.assertTrue(tf_feature_column.name in feature_name_list)
 
 
 class EstimatorBuilder(Builder):
