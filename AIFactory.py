@@ -1,9 +1,9 @@
-from AIBuilder.AIRecipe import AIRecipe
 from AIBuilder.AI import AI
 from AIBuilder.Data import DataModel, DataSetSplitter, DataLoader
 from abc import ABC, abstractmethod
 import tensorflow as tf
 import unittest
+from unittest import mock
 from typing import Optional
 
 
@@ -37,7 +37,7 @@ class DataBuilder(Builder):
     NUMERICAL_COLUMN = 'numeric_column'
     valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
 
-    def __init__(self, data_source: str, target_column: str, validation_data_percentage: int):
+    def __init__(self, data_source: str, target_column: str, validation_data_percentage: int, feature_columns: list):
         self.validation_data_percentage = validation_data_percentage
         self.training_data_percentage = 100 - self.validation_data_percentage
         self.data_source = data_source
@@ -45,6 +45,9 @@ class DataBuilder(Builder):
         self.feature_columns = []
         self.test_data = None
         self.validation_data = None
+
+        for feature_column in feature_columns:
+            self.add_feature_column(name=feature_column[0], column_type=feature_column[1])
 
     @property
     def dependent_on(self) -> list:
@@ -219,13 +222,14 @@ class EstimatorBuilder(Builder):
         self.validate_estimator(self.estimator_type)
         return True
 
-    def build(self, neural_net: AI, recipe: AIRecipe):
+    def build(self, neural_net: AI):
         if self.estimator_type is self.LINEAR_REGRESSOR:
             estimator = tf.estimator.LinearRegressor(
                 feature_columns=neural_net.training_data.get_tf_feature_columns(),
                 optimizer=neural_net.optimizer
             )
 
+            print('check1')
             neural_net.set_estimator(estimator)
             return
 
@@ -253,8 +257,19 @@ class TestEstimatorBuilder(unittest.TestCase):
         with self.assertRaises(AssertionError):
             EstimatorBuilder('invalid')
 
-    def test_build(self):
-        pass
+    @mock.patch('AIFactory.tf.train.GradientDescentOptimizer')
+    @mock.patch('AIFactory.DataModel')
+    def test_build(self, mock_data_model, mock_optimizer):
+        estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        arti = AI()
+
+        mock_data_model.get_tf_feature_columns.return_value = []
+
+        arti.set_optimizer(mock_optimizer)
+        arti.set_training_data(mock_data_model)
+
+        estimator_builder.build(arti)
+        self.assertIsNotNone(arti.estimator)
 
 
 class OptimizerBuilder(Builder):
@@ -288,7 +303,7 @@ class OptimizerBuilder(Builder):
         assert type(self.gradient_clipping) is float or self.gradient_clipping is None, \
             'gradient clipping must be float or None, currently {}'.format(self.gradient_clipping)
 
-    def build(self, neural_net: AI, recipe: AIRecipe):
+    def build(self, neural_net: AI):
         my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type, learning_rate=self.learning_rate)
 
         if self.gradient_clipping is not None:
@@ -341,51 +356,99 @@ class TestOptimizerBuilder(unittest.TestCase):
         with self.assertRaises(AssertionError):
             optimizer_builder.validate()
 
-    def test_build(self):
-        pass
+    def test_build_with_clipping(self):
+        arti = AI()
+        optimizer_builder_with_clipping = OptimizerBuilder(
+            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            learning_rate=1.0,
+            gradient_clipping=1.0)
+
+        optimizer_builder_with_clipping.build(arti)
+        self.assertIsNotNone(arti.optimizer)
+
+    def test_build_with_no_clipping(self):
+        arti = AI()
+        optimizer_builder_no_clipping = OptimizerBuilder(
+            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            learning_rate=1.0)
+
+        optimizer_builder_no_clipping.build(arti)
+        self.assertIsNotNone(arti.optimizer)
 
 
 class AIFactory:
+
     def __init__(self):
-        self.AIBuilders = []
-        # load you Builders here instead of using DI
-        self.AIBuilders.append(EstimatorBuilder())
-        self.AIBuilders.append(OptimizerBuilder())
+        self.builders_by_name = {}
+        self.loaded_builders = []
+        self.unloaded_builders = []
 
-        self.required_builders = []
+        self.builders_sorted = []
 
-    def create_AI(self, recipe: AIRecipe) -> AI:
+    def create_AI(self, builders: list) -> AI:
         artificial_intelligence = AI()
 
-        ingredient_types = recipe.get_ingredient_types()
+        for builder in builders:
+            builder.validate()
 
-        for ingredient_type in ingredient_types:
-            builder = self.get_builder(ingredient_type)
-            self.required_builders.append(builder)
+        self.sortBuilders(builders)
 
-        for builder in self.required_builders:
-            builder.validate(recipe)
-
-        # self.sortBuilders()
-
-        for builder in self.required_builders:
-            builder.build(artificial_intelligence, recipe)
+        for builder in self.builders_sorted:
+            builder.build(artificial_intelligence)
 
         return artificial_intelligence
 
-    def get_builder(self, ingredient_type: str) -> Builder:
-        valid_decorators = []
-        for decorator in self.AIBuilders:
-            if decorator.accepts(ingredient_type):
-                valid_decorators.append(decorator)
-
-        if len(valid_decorators) is 1:
-            return valid_decorators.pop()
-
-        raise RuntimeError('{} decorators found for ingredient: {}'.format(len(valid_decorators), ingredient_type))
-
     def sortBuilders(self, builders: list):
-        pass
+        for builder in builders:
+            self.unloaded_builders.append(builder)
+            self.builders_by_name[builder.ingredient_type] = builder
+
+        while len(self.unloaded_builders) is not 0:
+            builder = self.unloaded_builders.pop()
+            if not self.has_unloaded_dependencies(builder):
+                self.load_builder(builder)
+                continue
+
+            self.unloaded_builders.append(builder)
+
+            dependency = self.get_next_loadable_dependency(builder)
+            self.unloaded_builders.remove(dependency)
+            self.load_builder(dependency)
+
+    def has_unloaded_dependencies(self, builder: Builder):
+        dependencies = builder.dependent_on
+        if len(dependencies) is 0:
+            return False
+
+        for dependency in dependencies:
+            if dependency not in self.loaded_builders:
+                return True
+
+        return False
+
+    def load_builder(self, builder: Builder):
+        self.loaded_builders.append(builder.ingredient_type)
+        if builder in self.unloaded_builders:
+            self.unloaded_builders.remove(builder)
+
+        self.builders_sorted.append(builder)
+
+    def get_next_loadable_dependency(self, builder: Builder) -> Builder:
+        dependencies = builder.dependent_on
+
+        if len(dependencies) == 0:
+            raise RuntimeError('{} has no dependencies, so cannot get next loadable dependency.')
+
+        for dependency in dependencies:
+            dependent_builder = self.builders_by_name[dependency]
+
+            if self.has_unloaded_dependencies(dependent_builder):
+                return self.get_next_loadable_dependency(dependent_builder)
+
+            if dependent_builder in self.unloaded_builders:
+                return dependent_builder
+
+            continue
 
 
 class TestAIFactory(unittest.TestCase):
@@ -393,24 +456,24 @@ class TestAIFactory(unittest.TestCase):
     def setUp(self):
         self.factory = AIFactory()
 
-    # def test_create_AI(self):
-    #     # 'type': 'gradient_descent_optimizer'
-    #     # 'learning_rate' : float
-    #     # (optional)'gradient_clipping' : float
-    #
-    #     # 'estimator':
-    #     # 'type' : 'linear_regressor'
-    #
-    #     # todo add datamodel builder as optimizerbuilder depends on it.
-    #     recipe = AIRecipe({
-    #         'estimator': {'type': 'linear_regressor'},
-    #         'optimizer': {'type': 'gradient_descent_optimizer', 'learning_rate': 0.0002, 'gradient_clipping': 5.0}
-    #     })
-    #
-    #     artie = self.factory.create_AI(recipe=recipe)
-    #     print(type(artie.optimizer))
-    #     print(type(artie.estimator))
-    #     print(artie)
+    def test_create_AI(self):
+        data_builder = DataBuilder(data_source='../data/test_data.csv', target_column='target_1',
+                                   validation_data_percentage=20,
+                                   feature_columns=[
+                                       ['feature_1', DataBuilder.CATEGORICAL_COLUMN_VOC_LIST],
+                                       ['feature_2', DataBuilder.NUMERICAL_COLUMN],
+                                       ['feature_3', DataBuilder.NUMERICAL_COLUMN]
+                                   ])
+
+        estimator_builder = EstimatorBuilder(estimator_type=EstimatorBuilder.LINEAR_REGRESSOR)
+        optimizer_builder = OptimizerBuilder(optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+                                             learning_rate=0.00002,
+                                             gradient_clipping=5.0)
+
+        artie = self.factory.create_AI([data_builder, estimator_builder, optimizer_builder])
+        print(type(artie.optimizer))
+        print(type(artie.estimator))
+        print(artie)
 
 
 if __name__ == '__main__':
