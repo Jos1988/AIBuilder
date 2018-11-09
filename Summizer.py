@@ -1,7 +1,19 @@
 import time
+from abc import ABC, abstractmethod
 
 
-class TimeSummizer:
+class Summizer(ABC):
+
+    @abstractmethod
+    def log(self, label: str, value):
+        pass
+
+    @abstractmethod
+    def summize(self):
+        pass
+
+
+class TimeSummizer(Summizer):
     time_log = dict()
     start_time = None
 
@@ -11,33 +23,27 @@ class TimeSummizer:
     def start_time_log(self):
         self.start_time = time.time()
 
-    def log_time(self, name, log_time=None, print_now=False):
+    def log(self, label, value):
         """ log given time and if no time given log current time
 
         :param print:
-        :param name:
-        :param log_time:
+        :param label:
+        :param value:
         :return:
         """
-        # todo  refactor to function and raise warning.
         if self.start_time is None:
-            raise Exception('!!! no time logging, start time not set.')
+            self.start_time_log()
 
-        if log_time is None:
-            log_time = time.time()
+        if value is None:
+            value = time.time()
 
-        self.time_log[name] = log_time
+        self.time_log[label] = value
 
-        if print_now is True:
-            elapsed = log_time - self.start_time
-            print('\b' + name + ':' + str(elapsed) + '\b')
-
-    def summize_times(self, total=True):
+    def summize(self):
         """ print summary of logged times
 
         :return:
         """
-        # todo  refactor to function and raise warning.
         if self.start_time is None:
             print('!!! no time logging, start time not set.')
             return
@@ -50,7 +56,6 @@ class TimeSummizer:
             print(label + ': ' + str(elapsed))
             previous_time = time_stamp
 
-        if total is True:
-            print('--------------------')
-            elapsed = now - self.start_time
-            print('total: ' + str(elapsed) + '\b')
+        print('--------------------')
+        elapsed = now - self.start_time
+        print('total: ' + str(elapsed) + '\b')

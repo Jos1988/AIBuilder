@@ -104,7 +104,7 @@ class DataBuilder(Builder):
         data.set_tf_feature_columns(feature_columns)
 
         split_data = self.split_validation_and_test_data(data=data)
-        ai.set_validation_data(split_data['validation_data'])
+        ai.set_evaluation_data(split_data['validation_data'])
         ai.set_training_data(split_data['training_data'])
 
     def load_data(self) -> DataModel:
@@ -194,7 +194,7 @@ class TestDataBuilder(unittest.TestCase):
 
         feature_names = ['feature_1', 'feature_2', 'feature_3']
         self.validate_data_frame(arti.training_data, feature_names)
-        self.validate_data_frame(arti.validation_data, feature_names)
+        self.validate_data_frame(arti.evaluation_data, feature_names)
 
     def validate_data_frame(self, data_frame: DataModel, feature_name_list: list):
         self.assertEqual(data_frame.feature_columns_names, feature_name_list)
