@@ -26,8 +26,6 @@ def base_input_function(ml_dataset: Data.DataModel, batch_size=1, epoch=1):
 
     features = _dataset_to_dict(features=ml_dataset.get_feature_columns())
 
-    print(ml_dataset)
-
     data_set = tf.data.Dataset.from_tensor_slices((features, ml_dataset.get_target_column()))
 
     data_set = data_set.shuffle(100).repeat(epoch).batch(batch_size)

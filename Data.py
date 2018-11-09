@@ -11,8 +11,13 @@ class MetaData:
     NUMERICAL_DATA_TYPE = 'numerical'
     UNKNOWN_DATA_TYPE = 'unknown'
 
-    def __init__(self, data: pd.DataFrame):
-        self.uncategorized_columns = list(data)
+    def __init__(self, data: pd.DataFrame = None):
+
+        self.uncategorized_columns = list()
+
+        if data is not None:
+            self.uncategorized_columns = list(data)
+
         self.categorical_columns = list()
         self.numerical_columns = list()
 
@@ -180,9 +185,12 @@ class TestDataset(unittest.TestCase):
         self._dataframe = pd.DataFrame(data=self._data)
         self._dataset = DataModel(self._dataframe)
 
-    def test_validate_columns(self):
+    def test_validate_columns_invalid(self):
         with self.assertRaises(RuntimeError):
             self._dataset.validate_columns(['col3'])
+
+    def test_validate_columns(self):
+        self._dataset.validate_columns(['col1'])
 
     def test_feature_columns(self):
         intended_columns = ['col1', 'col2']

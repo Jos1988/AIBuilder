@@ -59,7 +59,7 @@ class MissingDataScrubber(Scrubber):
     def _scrub_categorical_data(self, data_model: DataModel, categorical_columns: list) -> DataModel:
         data_model.validate_columns(categorical_columns)
         df = data_model.get_dataframe()
-        df = df[categorical_columns].fillna(self._missing_category_name)
+        df[categorical_columns] = df[categorical_columns].fillna(self._missing_category_name)
         data_model.set_dataframe(df)
 
         return data_model
@@ -88,6 +88,8 @@ class TestMissingDataScrubber(unittest.TestCase):
         missing_data_scrubber.scrub(self._data_model)
         self.assertEqual(unknown_category, self._data_model.get_dataframe()['categorical_1'][1])
         self.assertEqual(unknown_category, self._data_model.get_dataframe()['categorical_2'][2])
+        self.assertEqual(1, self._data_model.get_dataframe()['numerical_1'][0])
+        self.assertEqual(9, self._data_model.get_dataframe()['unknown_1'][0])
 
 
 class AverageColumnScrubber(Scrubber):
@@ -313,7 +315,10 @@ class AndScrubber(Scrubber):
     def __init__(self, *scrubbers: Scrubber):
         self.scrubber_list = []
         for scrubber in scrubbers:
-            self.scrubber_list.append(scrubber)
+            self.add_scrubber(scrubber)
+
+    def add_scrubber(self, scrubber: Scrubber):
+        self.scrubber_list.append(scrubber)
 
     def validate(self, data_model: DataModel):
         pass

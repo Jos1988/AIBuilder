@@ -1,5 +1,6 @@
-from AIBuilder.AI import AI
-from AIBuilder.Data import DataModel, DataSetSplitter, DataLoader
+from AIBuilder.AI import AI, AbstractAI
+from AIBuilder.Data import DataModel, DataSetSplitter, DataLoader, MetaData
+import AIBuilder.DataScrubbing as scrubber
 from abc import ABC, abstractmethod
 import tensorflow as tf
 import unittest
@@ -12,6 +13,7 @@ class Builder(ABC):
     ESTIMATOR = 'estimator'
     OPTIMIZER = 'optimizer'
     DATA_MODEL = 'data_model'
+    SCRUBBER = 'scrubber'
 
     @property
     @abstractmethod
@@ -28,7 +30,7 @@ class Builder(ABC):
         pass
 
     @abstractmethod
-    def build(self, neural_net: AI):
+    def build(self, neural_net: AbstractAI):
         pass
 
 
@@ -37,7 +39,13 @@ class DataBuilder(Builder):
     NUMERICAL_COLUMN = 'numeric_column'
     valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
 
-    def __init__(self, data_source: str, target_column: str, validation_data_percentage: int, feature_columns: list):
+    def __init__(self, data_source: str,
+                 target_column: str,
+                 validation_data_percentage: int,
+                 feature_columns: list,
+                 metadata: MetaData):
+
+        self.metadata = metadata
         self.validation_data_percentage = validation_data_percentage
         self.training_data_percentage = 100 - self.validation_data_percentage
         self.data_source = data_source
@@ -87,9 +95,10 @@ class DataBuilder(Builder):
         for feature_column in self.feature_columns:
             self.is_valid_column_type(feature_column['type'])
 
-    def build(self, ai: AI):
+    def build(self, ai: AbstractAI):
         data = self.load_data()
         data.set_target_column(self.target_column)
+        data.metadata = self.metadata
 
         feature_columns = self.render_tf_feature_columns(data=data)
         data.set_tf_feature_columns(feature_columns)
@@ -171,7 +180,9 @@ class TestDataBuilder(unittest.TestCase):
     def test_build(self):
         data_builder = DataBuilder(data_source='../data/test_data.csv',
                                    target_column='target_1',
-                                   validation_data_percentage=20)
+                                   validation_data_percentage=20,
+                                   feature_columns=[],
+                                   metadata=MetaData())
 
         data_builder.add_feature_column(name='feature_1', column_type=DataBuilder.CATEGORICAL_COLUMN_VOC_LIST)
         data_builder.add_feature_column(name='feature_2', column_type=DataBuilder.NUMERICAL_COLUMN)
@@ -222,14 +233,13 @@ class EstimatorBuilder(Builder):
         self.validate_estimator(self.estimator_type)
         return True
 
-    def build(self, neural_net: AI):
+    def build(self, neural_net: AbstractAI):
         if self.estimator_type is self.LINEAR_REGRESSOR:
             estimator = tf.estimator.LinearRegressor(
                 feature_columns=neural_net.training_data.get_tf_feature_columns(),
                 optimizer=neural_net.optimizer
             )
 
-            print('check1')
             neural_net.set_estimator(estimator)
             return
 
@@ -303,7 +313,7 @@ class OptimizerBuilder(Builder):
         assert type(self.gradient_clipping) is float or self.gradient_clipping is None, \
             'gradient clipping must be float or None, currently {}'.format(self.gradient_clipping)
 
-    def build(self, neural_net: AI):
+    def build(self, neural_net: AbstractAI):
         my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type, learning_rate=self.learning_rate)
 
         if self.gradient_clipping is not None:
@@ -376,6 +386,74 @@ class TestOptimizerBuilder(unittest.TestCase):
         self.assertIsNotNone(arti.optimizer)
 
 
+class ScrubAdapter(Builder):
+
+    def __init__(self):
+        self.and_scrubber = scrubber.AndScrubber()
+
+    @property
+    def dependent_on(self) -> list:
+        return [self.DATA_MODEL]
+
+    @property
+    def ingredient_type(self) -> str:
+        return self.SCRUBBER
+
+    def add_scrubber(self, scrubber: scrubber.Scrubber):
+        self.and_scrubber.add_scrubber(scrubber)
+
+    def validate(self):
+        pass
+
+    def build(self, neural_net: AbstractAI):
+        training_data = neural_net.training_data
+        validation_data = neural_net.validation_data
+
+        self.and_scrubber.validate_metadata(training_data.metadata)
+        self.and_scrubber.scrub(training_data)
+
+        self.and_scrubber.validate_metadata(validation_data.metadata)
+        self.and_scrubber.scrub(validation_data)
+
+
+class TestScrubAdapter(unittest.TestCase):
+
+    def setUp(self):
+        self.scrubber_one = mock.patch('AIFactory.scrubber')
+        self.scrubber_two = mock.patch('AIFactory.scrubber')
+
+        self.scrub_adapter = ScrubAdapter()
+        self.scrub_adapter.add_scrubber(self.scrubber_one)
+        self.scrub_adapter.add_scrubber(self.scrubber_two)
+
+    def test_add_scrubber(self):
+        self.assertIn(self.scrubber_one, self.scrub_adapter.and_scrubber.scrubber_list)
+        self.assertIn(self.scrubber_two, self.scrub_adapter.and_scrubber.scrubber_list)
+
+    @mock.patch('AIFactory.AI')
+    def test_build(self, mock_ai):
+        training_data = mock.patch('AIFactory.Data.DataModel')
+        training_data.metadata = mock.Mock(name='training_metadata')
+
+        validation_data = mock.patch('AIFactory.Data.DataModel')
+        validation_data.metadata = mock.Mock(name='validation_metadata')
+
+        and_scrubber = mock.Mock(name='and_scrubber')
+        and_scrubber.validate_metadata = mock.Mock(name='and_scrubber_validate_metadata')
+        and_scrubber.scrub = mock.Mock(name='and_scrubber_scrub')
+
+        mock_ai.training_data = training_data
+        mock_ai.validation_data = validation_data
+        self.scrub_adapter.and_scrubber = and_scrubber
+
+        self.scrub_adapter.build(mock_ai)
+
+        and_scrubber.validate_metadata.assert_any_call(training_data.metadata),
+        and_scrubber.scrub.assert_any_call(training_data),
+        and_scrubber.validate_metadata.assert_any_call(validation_data.metadata),
+        and_scrubber.scrub.assert_any_call(validation_data)
+
+
 class AIFactory:
 
     def __init__(self):
@@ -385,7 +463,7 @@ class AIFactory:
 
         self.builders_sorted = []
 
-    def create_AI(self, builders: list) -> AI:
+    def create_AI(self, builders: list) -> AbstractAI:
         artificial_intelligence = AI()
 
         for builder in builders:
@@ -437,7 +515,8 @@ class AIFactory:
         dependencies = builder.dependent_on
 
         if len(dependencies) == 0:
-            raise RuntimeError('{} has no dependencies, so cannot get next loadable dependency.')
+            raise RuntimeError('{} has no dependencies, so cannot get next loadable dependency.'
+                               .format(builder.__class__.__name__))
 
         for dependency in dependencies:
             dependent_builder = self.builders_by_name[dependency]
@@ -457,23 +536,35 @@ class TestAIFactory(unittest.TestCase):
         self.factory = AIFactory()
 
     def test_create_AI(self):
+        metadata = MetaData()
+        metadata.define_numerical_columns(['feature_2', 'feature_3', 'target_1'])
+        metadata.define_categorical_columns(['feature_1'])
+
         data_builder = DataBuilder(data_source='../data/test_data.csv', target_column='target_1',
                                    validation_data_percentage=20,
                                    feature_columns=[
                                        ['feature_1', DataBuilder.CATEGORICAL_COLUMN_VOC_LIST],
                                        ['feature_2', DataBuilder.NUMERICAL_COLUMN],
                                        ['feature_3', DataBuilder.NUMERICAL_COLUMN]
-                                   ])
+                                   ],
+                                   metadata=metadata)
 
         estimator_builder = EstimatorBuilder(estimator_type=EstimatorBuilder.LINEAR_REGRESSOR)
         optimizer_builder = OptimizerBuilder(optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
                                              learning_rate=0.00002,
                                              gradient_clipping=5.0)
 
-        artie = self.factory.create_AI([data_builder, estimator_builder, optimizer_builder])
-        print(type(artie.optimizer))
-        print(type(artie.estimator))
-        print(artie)
+        missing_data_scrubber = scrubber.MissingDataScrubber('missing data')
+        average_scrubber = scrubber.AverageColumnScrubber(('feature_2', 'feature_3'), 'feature_4')
+        scrub_adapter = ScrubAdapter()
+        scrub_adapter.add_scrubber(missing_data_scrubber)
+        scrub_adapter.add_scrubber(average_scrubber)
+
+        artie = self.factory.create_AI([data_builder, estimator_builder, optimizer_builder, scrub_adapter])
+        self.assertIsNotNone(artie.optimizer)
+        self.assertIsNotNone(artie.estimator)
+        self.assertIsNotNone(artie.training_data)
+        self.assertIsNotNone(artie.validation_data)
 
 
 if __name__ == '__main__':
