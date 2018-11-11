@@ -1,9 +1,8 @@
 import unittest
-
 from AIBuilder.AI import AbstractAI, AI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 from AIBuilder.Data import MetaData, DataModel, DataLoader, DataSetSplitter
-from AIBuilder.AIFactory.Specifications.specification import RangeSpecification, TypeSpecification, DataTypeSpecification
+from AIBuilder.AIFactory.Specifications.specification import RangeSpecification, DataTypeSpecification
 from AIBuilder.AIFactory.Specifications.FeatureSpecifications import FeatureColumnsSpecification
 import tensorflow as tf
 
@@ -28,12 +27,12 @@ class DataBuilder(Builder):
 
         self.data_source = DataTypeSpecification('data_source', data_source, str)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
-        self.feature_columns = FeatureColumnsSpecification('feature_columns', [], {})
+        self.feature_columns = FeatureColumnsSpecification('feature_columns', [], self.valid_column_types)
         self.test_data = None
         self.validation_data = None
 
         for feature_column in feature_columns:
-            self.feature_columns.add_feature_columns(name=feature_column[0], column_type=feature_column[1])
+            self.add_feature_column(name=feature_column[0], column_type=feature_column[1])
 
     @property
     def dependent_on(self) -> list:
@@ -43,15 +42,17 @@ class DataBuilder(Builder):
     def builder_type(self) -> str:
         return self.DATA_MODEL
 
+    def add_feature_column(self, name: str, column_type: str):
+        self.feature_columns.add_feature_column(name=name, column_type=column_type)
+
     def validate(self):
-
+        self.validate_specifications()
         assert self.target_column not in self.get_feature_column_names(), \
-            'target column {}, also set as feature column!'.format(self.target_column)
-
+            'target column {}, also set as feature column!'.format(self.target_column())
 
     def build(self, ai: AbstractAI):
         data = self.load_data()
-        data.set_target_column(self.target_column)
+        data.set_target_column(self.target_column())
         data.metadata = self.metadata
 
         feature_columns = self.render_tf_feature_columns(data=data)
@@ -67,36 +68,36 @@ class DataBuilder(Builder):
         self.load_file(loader)
 
         columns = self.get_feature_column_names()
-        columns.append(self.target_column)
+        columns.append(self.target_column())
 
         loader.filter_columns(columns)
 
         return loader.get_dataset()
 
     def load_file(self, loader: DataLoader):
-        if 'csv' in self.data_source:
-            loader.load_csv(self.data_source)
+        if 'csv' in self.data_source():
+            loader.load_csv(self.data_source())
             return
 
-        raise RuntimeError('Failed to load data from {}.'.format(self.data_source))
+        raise RuntimeError('Failed to load data from {}.'.format(self.data_source()))
 
     def get_feature_column_names(self) -> list:
         names = []
-        for feature_column in self.feature_columns:
+        for feature_column in self.feature_columns():
             names.append(feature_column['name'])
 
         return names
 
     def split_validation_and_test_data(self, data: DataModel):
         splitter = DataSetSplitter(data_model=data)
-        result = splitter.split_by_ratio([self.training_data_percentage, self.validation_data_percentage])
+        result = splitter.split_by_ratio([self.training_data_percentage(), self.validation_data_percentage()])
 
         return {'training_data': result[0], 'validation_data': result[1]}
 
-    # possible sepperate builder
+    # todo: possible separate builder
     def render_tf_feature_columns(self, data: DataModel) -> list:
         tf_feature_columns = []
-        for feature_column in self.feature_columns:
+        for feature_column in self.feature_columns():
             column = None
             if feature_column['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
                 column = self.build_categorical_column_voc_list(feature_column, data)
@@ -129,7 +130,7 @@ class DataBuilder(Builder):
 class TestDataBuilder(unittest.TestCase):
 
     def test_build(self):
-        data_builder = DataBuilder(data_source='../data/test_data.csv',
+        data_builder = DataBuilder(data_source='../../../data/test_data.csv',
                                    target_column='target_1',
                                    validation_data_percentage=20,
                                    feature_columns=[],
@@ -154,3 +155,7 @@ class TestDataBuilder(unittest.TestCase):
 
         for tf_feature_column in data_frame.get_tf_feature_columns():
             self.assertTrue(tf_feature_column.name in feature_name_list)
+
+
+if __name__ == '__main__':
+    unittest.main()

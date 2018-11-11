@@ -13,6 +13,9 @@ class Specification(ABC):
     def validate(self):
         pass
 
+    def __call__(self):
+        return self.value
+
 
 class TypeSpecification(Specification):
 

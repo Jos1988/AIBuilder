@@ -24,7 +24,7 @@ class FeatureColumnsSpecification(Specification):
             assert feature_column['type'] in self.valid_types, 'Value {} must be in {}, {} given'\
                 .format(self.name, self.valid_types, self.value)
 
-    def add_feature_columns(self, name: str, column_type: str):
+    def add_feature_column(self, name: str, column_type: str):
         new_column_data = {'name': name, 'type': column_type}
         self.value.append(new_column_data)
 
@@ -42,7 +42,7 @@ class TestFeatureColumnsSpecification(unittest.TestCase):
         self.specification_setter(feature_columns=feature_columns)
         self.feature_col_specification.validate()
 
-        self.feature_col_specification.add_feature_columns('column_name_3', 'type_one')
+        self.feature_col_specification.add_feature_column('column_name_3', 'type_one')
         self.feature_col_specification.validate()
 
         values = self.feature_col_specification.value
