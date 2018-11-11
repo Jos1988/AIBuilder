@@ -23,7 +23,7 @@ class OptimizerBuilder(Builder):
         return []
 
     @property
-    def ingredient_type(self) -> str:
+    def builder_type(self) -> str:
         return self.OPTIMIZER
 
     def validate(self) -> bool:

@@ -1,5 +1,9 @@
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
+from AIBuilder.AIFactory.Builders.DataBuilder import DataBuilder
+from AIBuilder.AIFactory.Builders.EstimatorBuilder import EstimatorBuilder
+from AIBuilder.AIFactory.Builders.OptimizerBuilder import OptimizerBuilder
+from AIBuilder.AIFactory.Builders.ScrubAdapter import ScrubAdapter
 from AIBuilder.Data import MetaData
 import AIBuilder.DataScrubbing as scrubber
 import unittest
@@ -30,7 +34,7 @@ class AIFactory:
     def sortBuilders(self, builders: list):
         for builder in builders:
             self.unloaded_builders.append(builder)
-            self.builders_by_name[builder.ingredient_type] = builder
+            self.builders_by_name[builder.builder_type] = builder
 
         while len(self.unloaded_builders) is not 0:
             builder = self.unloaded_builders.pop()
@@ -56,7 +60,7 @@ class AIFactory:
         return False
 
     def load_builder(self, builder: Builder):
-        self.loaded_builders.append(builder.ingredient_type)
+        self.loaded_builders.append(builder.builder_type)
         if builder in self.unloaded_builders:
             self.unloaded_builders.remove(builder)
 

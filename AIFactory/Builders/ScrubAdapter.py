@@ -16,7 +16,7 @@ class ScrubAdapter(Builder):
         return [self.DATA_MODEL]
 
     @property
-    def ingredient_type(self) -> str:
+    def builder_type(self) -> str:
         return self.SCRUBBER
 
     def add_scrubber(self, scrubber: scrubber.Scrubber):

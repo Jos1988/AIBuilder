@@ -1,6 +1,5 @@
 import unittest
 from unittest import mock
-
 from AIBuilder.AI import AbstractAI, AI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 import tensorflow as tf
@@ -20,7 +19,7 @@ class EstimatorBuilder(Builder):
         return [self.OPTIMIZER, self.DATA_MODEL]
 
     @property
-    def ingredient_type(self) -> str:
+    def builder_type(self) -> str:
         return self.ESTIMATOR
 
     def set_estimator(self, estimator_type):

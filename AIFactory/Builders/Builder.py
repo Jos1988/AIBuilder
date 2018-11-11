@@ -3,7 +3,7 @@ from AIBuilder.AI import AbstractAI
 
 
 class Builder(ABC):
-    # register you new builder types here.
+    # add you new builder types here.
     ESTIMATOR = 'estimator'
     OPTIMIZER = 'optimizer'
     DATA_MODEL = 'data_model'
@@ -16,7 +16,7 @@ class Builder(ABC):
 
     @property
     @abstractmethod
-    def ingredient_type(self) -> str:
+    def builder_type(self) -> str:
         pass
 
     @abstractmethod
