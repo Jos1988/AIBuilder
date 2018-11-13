@@ -1,5 +1,7 @@
 import unittest
-from AIBuilder.AI import AbstractAI, AI
+from unittest import mock
+from typing import Optional
+from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 import tensorflow as tf
 
@@ -38,6 +40,7 @@ class OptimizerBuilder(Builder):
     def build(self, neural_net: AbstractAI):
         my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type, learning_rate=self.learning_rate)
 
+        print(my_optimizer)
         if self.gradient_clipping is not None:
             my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, self.gradient_clipping)
 
@@ -72,37 +75,43 @@ class TestOptimizerBuilder(unittest.TestCase):
         optimizer_builder_with_clipping.validate()
 
     def test_invalid_validate(self):
-        with self.assertRaises(AssertionError):
-            OptimizerBuilder(
-                optimizer_type='invalid',
-                learning_rate=5.0,
-                gradient_clipping=0.0002)
-
         optimizer_builder = OptimizerBuilder(
-            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
-            learning_rate=0.1,
+            optimizer_type='invalid',
+            learning_rate=5.0,
             gradient_clipping=0.0002)
-
-        optimizer_builder.optimizer_type = 'invalid'
 
         with self.assertRaises(AssertionError):
             optimizer_builder.validate()
 
-    def test_build_with_clipping(self):
-        arti = AI()
+    @mock.patch('OptimizerBuilder.tf.contrib.estimator.clip_gradients_by_norm')
+    @mock.patch('OptimizerBuilder.tf.train.GradientDescentOptimizer')
+    def test_build_with_clipping(self, mock_optimizer, mock_clipper):
+        arti = mock.Mock('OptimizerBuilder.AbstractAI')
+        arti.set_optimizer = mock.Mock()
+
         optimizer_builder_with_clipping = OptimizerBuilder(
             optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
             learning_rate=1.0,
-            gradient_clipping=1.0)
+            gradient_clipping=0.1)
 
         optimizer_builder_with_clipping.build(arti)
-        self.assertIsNotNone(arti.optimizer)
+        arti.set_optimizer.assert_called_once()
+        mock_optimizer.assert_called_with(learning_rate=1.0)
+        mock_clipper.assert_called()
 
-    def test_build_with_no_clipping(self):
-        arti = AI()
+    @mock.patch('OptimizerBuilder.tf.train.GradientDescentOptimizer')
+    def test_build_with_no_clipping(self, mock_optimizer):
+        arti = mock.Mock('OptimizerBuilder.AbstractAI')
+        arti.set_optimizer = mock.Mock()
+
         optimizer_builder_no_clipping = OptimizerBuilder(
             optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
             learning_rate=1.0)
 
         optimizer_builder_no_clipping.build(arti)
-        self.assertIsNotNone(arti.optimizer)
+        arti.set_optimizer.assert_called_once()
+        mock_optimizer.assert_called_with(learning_rate=1.0)
+
+
+if __name__ == '__main__':
+    unittest.main()
