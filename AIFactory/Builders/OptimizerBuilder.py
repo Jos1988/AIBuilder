@@ -3,7 +3,7 @@ from unittest import mock
 from typing import Optional
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
-from AIBuilder.AIFactory.Specifications.BasicSpecification import DataTypeSpecification, TypeSpecification, \
+from AIBuilder.AIFactory.Specifications.BasicSpecifications import DataTypeSpecification, TypeSpecification, \
     NullSpecification
 import tensorflow as tf
 

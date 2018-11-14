@@ -1,6 +1,6 @@
 import unittest
 from typing import List
-from AIBuilder.AIFactory.Specifications.BasicSpecification import Specification
+from AIBuilder.AIFactory.Specifications.BasicSpecifications import Specification
 
 
 class FeatureColumnsSpecification(Specification):

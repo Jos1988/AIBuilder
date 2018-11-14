@@ -1,6 +1,6 @@
 import unittest
 from unittest import mock
-from AIBuilder.AIFactory.Specifications.BasicSpecification import TypeSpecification
+from AIBuilder.AIFactory.Specifications.BasicSpecifications import TypeSpecification
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 import tensorflow as tf

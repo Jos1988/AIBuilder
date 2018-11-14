@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import unittest
-from typing import List
+from typing import List, Optional
 
 
 class Specification(ABC):
@@ -118,6 +118,42 @@ class TestNullSpecification(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             self.specification.validate()
+
+
+class Descriptor(Specification):
+
+    def __init__(self, name: str, value: Optional[List]):
+        if value is None:
+            value = []
+
+        super().__init__(name, value)
+
+    def validate(self):
+        pass
+
+    def add_description(self, value: str):
+        self.value.append(value)
+
+
+class TestDescriptor(unittest.TestCase):
+
+    def test_valid(self):
+        self.descriptor = Descriptor('description', ['test 1'])
+
+        self.assertEqual(self.descriptor.name, 'description')
+        self.assertEqual(self.descriptor.value, ['test 1'])
+        self.descriptor.add_description('test 2')
+        self.assertEqual(self.descriptor.value, ['test 1', 'test 2'])
+        self.descriptor.validate()
+
+    def test_valid_2(self):
+        self.descriptor = Descriptor('description', None)
+
+        self.assertEqual(self.descriptor.name, 'description')
+        self.assertEqual(self.descriptor.value, [])
+        self.descriptor.add_description('test 1')
+        self.assertEqual(self.descriptor.value, ['test 1'])
+        self.descriptor.validate()
 
 
 if __name__ == '__main__':
