@@ -3,6 +3,8 @@ from unittest import mock
 from typing import Optional
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
+from AIBuilder.AIFactory.Specifications.BasicSpecification import DataTypeSpecification, TypeSpecification, \
+    NullSpecification
 import tensorflow as tf
 
 
@@ -15,10 +17,12 @@ class OptimizerBuilder(Builder):
     valid_optimizer_types = [GRADIENT_DESCENT_OPTIMIZER]
 
     def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[float] = None):
-        self.validate_optimizer_type(optimizer_type)
-        self.optimizer_type = optimizer_type
-        self.learning_rate = learning_rate
-        self.gradient_clipping = gradient_clipping
+        self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, self.valid_optimizer_types)
+        self.learning_rate = DataTypeSpecification('learning_rate', learning_rate, float)
+
+        self.gradient_clipping = NullSpecification('gradient_clipping')
+        if gradient_clipping is not None:
+            self.gradient_clipping = DataTypeSpecification('gradient_clipping', gradient_clipping, float)
 
     @property
     def dependent_on(self) -> list:
@@ -28,19 +32,12 @@ class OptimizerBuilder(Builder):
     def builder_type(self) -> str:
         return self.OPTIMIZER
 
-    def validate(self) -> bool:
-        assert self.learning_rate is not float, 'optimizer learning rate must be float, currently: {}'.format(
-            self.learning_rate)
-
-        self.validate_optimizer_type(self.optimizer_type)
-
-        assert type(self.gradient_clipping) is float or self.gradient_clipping is None, \
-            'gradient clipping must be float or None, currently {}'.format(self.gradient_clipping)
+    def validate(self):
+        self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type, learning_rate=self.learning_rate)
+        my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type(), learning_rate=self.learning_rate())
 
-        print(my_optimizer)
         if self.gradient_clipping is not None:
             my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, self.gradient_clipping)
 
@@ -53,10 +50,6 @@ class OptimizerBuilder(Builder):
             return my_optimizer
 
         raise RuntimeError('Optimizer not set.')
-
-    def validate_optimizer_type(self, optimizer_type: str):
-        assert optimizer_type in self.valid_optimizer_types, 'Unknown type op optimizer {}, must be in {}'.format(
-            optimizer_type, self.valid_optimizer_types)
 
 
 class TestOptimizerBuilder(unittest.TestCase):

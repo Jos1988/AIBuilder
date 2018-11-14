@@ -2,7 +2,7 @@ import unittest
 from AIBuilder.AI import AbstractAI, AI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 from AIBuilder.Data import MetaData, DataModel, DataLoader, DataSetSplitter
-from AIBuilder.AIFactory.Specifications.specification import RangeSpecification, DataTypeSpecification
+from AIBuilder.AIFactory.Specifications.BasicSpecification import RangeSpecification, DataTypeSpecification
 from AIBuilder.AIFactory.Specifications.FeatureSpecifications import FeatureColumnsSpecification
 import tensorflow as tf
 

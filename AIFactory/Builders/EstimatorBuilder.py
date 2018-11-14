@@ -1,6 +1,6 @@
 import unittest
 from unittest import mock
-from AIBuilder.AIFactory.Specifications.specification import TypeSpecification
+from AIBuilder.AIFactory.Specifications.BasicSpecification import TypeSpecification
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 import tensorflow as tf
@@ -24,7 +24,7 @@ class EstimatorBuilder(Builder):
         return self.ESTIMATOR
 
     def set_estimator(self, estimator_type):
-        self.estimator_type = TypeSpecification(self.LINEAR_REGRESSOR, estimator_type, self.valid_estimator_types)
+        self.estimator_type = TypeSpecification('estimator_type', estimator_type, self.valid_estimator_types)
 
     def validate(self):
         self.validate_specifications()

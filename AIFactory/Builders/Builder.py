@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AbstractAI
-from AIBuilder.AIFactory.Specifications.specification import Specification
+from AIBuilder.AIFactory.Specifications.BasicSpecification import Specification
 
 
 class Builder(ABC):

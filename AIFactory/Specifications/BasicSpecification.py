@@ -97,5 +97,28 @@ class TestDataTypeSpecification(unittest.TestCase):
             self.data_type_specification.validate()
 
 
+class NullSpecification(Specification):
+
+    def __init__(self, name: str):
+        super().__init__(name, None)
+
+    def validate(self):
+        assert self.value is None, 'Null Specification not None but, {}.'.format(self.value)
+
+
+class TestNullSpecification(unittest.TestCase):
+
+    def test_valid(self):
+        self.specification = NullSpecification('test')
+        self.specification.validate()
+
+    def test_invalid(self):
+        self.specification = NullSpecification('test')
+        self.specification.value = 'something'
+
+        with self.assertRaises(AssertionError):
+            self.specification.validate()
+
+
 if __name__ == '__main__':
     unittest.main()
