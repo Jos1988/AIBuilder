@@ -26,8 +26,14 @@ class AIFactory:
 
         self.sortBuilders(builders)
 
+        ai_description = {}
         for builder in self.builders_sorted:
             builder.build(artificial_intelligence)
+
+            builder_description = builder.describe()
+            ai_description[builder.builder_type()] = builder_description
+
+        artificial_intelligence.description = ai_description
 
         return artificial_intelligence
 

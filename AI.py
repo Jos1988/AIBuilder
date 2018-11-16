@@ -7,6 +7,9 @@ from typing import Callable
 # abstract AI class
 class AbstractAI(ABC):
 
+    def __init__(self):
+        self.description = 'description not set.'
+
     @abstractmethod
     def train(self):
         pass
