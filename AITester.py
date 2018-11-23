@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AbstractAI
-from AIBuilder.Summizer import Summizer
+from AIBuilder.Summizer import Summizer, TimeSummizer
 from unittest import TestCase, mock
+import unittest
 from datetime import datetime
 
 
@@ -20,11 +21,9 @@ class AbstractAITester(ABC):
 class AITester(AbstractAITester):
     AI: AbstractAI
 
-    def __init__(self, test_name: str, log_dir: str, summizer: Summizer):
+    def __init__(self, summizer: Summizer):
         self.summizer = summizer
-        self.test_name = test_name
         self.test_time = None
-        self.log_dir = log_dir
         self.results = {}
 
     def set_AI(self, ai: AbstractAI):
@@ -32,14 +31,15 @@ class AITester(AbstractAITester):
 
     def train_AI(self):
         self.summizer.log('start training', None)
+        self.determine_test_time()
         self.AI.train()
         self.summizer.log('finished training', None)
 
     def evaluate_AI(self):
         self.summizer.log('start evaluation', None)
 
-        model_dir = self.create_model_dir_path()
-        self.results = self.AI.evaluate(model_dir=model_dir)
+        # model_dir = self.create_model_dir_path()
+        self.results = self.AI.evaluate()
 
         self.print_evaluation_results()
         self.log_testing_report()
@@ -56,10 +56,15 @@ class AITester(AbstractAITester):
         report_file = self.create_report_file_path()
 
         self.validate_results_set()
+        self.validate_test_time()
+
         report = open(report_file, 'a')
-        report.write('\n--- ' + self.test_time + ' ---')
+        report.write('\n--- AI: ' + self.AI.get_name() + ' ---')
+        report.write('\n--- time: ' + self.test_time + ' ---')
         for label, value in self.results.items():
             report.write('\n' + label + ': ' + str(value))
+
+        report.close()
 
     def validate_results_set(self):
         assert type(self.results) is dict, 'Test results not set in AI tester.'
@@ -68,17 +73,11 @@ class AITester(AbstractAITester):
         self.test_time = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
     def validate_test_time(self):
-        assert self.test_time is str, 'Test time not set in tester, cannot render filename.'
-
-    def create_model_dir_path(self):
-        self.validate_test_time()
-
-        return self.log_dir + '/' + self.test_name + '/tensor_board/' + self.test_time
+        assert type(self.test_time) is str, 'Test time not set in AITester.'
 
     def create_report_file_path(self):
-        self.validate_test_time()
 
-        return self.log_dir + '/' + self.test_name + '/ai_reports.txt'
+        return self.AI.get_log_dir() + '/' + self.AI.get_project_name() + '/ai_reports.txt'
 
 
 class AITesterTest(TestCase):
@@ -86,12 +85,17 @@ class AITesterTest(TestCase):
     def setUp(self):
         self.ai = mock.Mock('AITester.AbstractAI')
         self.ai.train = mock.Mock(name='train')
+        self.ai.get_name = mock.Mock(name='get_name')
+        self.ai.get_name.return_value = 'name'
+        self.ai.get_project_name = mock.Mock(name='get_project_name')
+        self.ai.get_project_name.return_value = 'project'
+        self.ai.get_log_dir = mock.Mock(name='get_log_dir')
+        self.ai.get_log_dir.return_value = 'path'
 
         summizer = mock.patch('AITester.Summizer')
         summizer.log = mock.Mock(name='log')
 
-        dir_path = 'path/'
-        self.ai_tester = AITester(log_dir=dir_path, test_name='test', summizer=summizer)
+        self.ai_tester = AITester(summizer=summizer)
         self.ai_tester.AI = self.ai
 
     def test_training(self):
@@ -100,18 +104,18 @@ class AITesterTest(TestCase):
         self.assertEqual(2, self.ai_tester.summizer.log.call_count)
 
     def test_evaluation(self):
-        self.ai_tester.create_model_dir_path = mock.Mock()
-        self.ai_tester.create_model_dir_path.return_value = 'test_dir/'
+        # self.ai_tester.create_model_dir_path = mock.Mock()
+        # self.ai_tester.create_model_dir_path.return_value = 'test_dir/'
         self.ai_tester.log_testing_report = mock.Mock()
         self.ai_tester.summizer.summize = mock.Mock()
         self.ai.evaluate = mock.Mock()
-        self.ai.evaluate.return_value = {'result': 'test'}
+        self.ai.evaluate.return_value = {'result': 'test_dir'}
 
         self.ai_tester.evaluate_AI()
 
         self.assertEqual(2, self.ai_tester.summizer.log.call_count)
         self.ai_tester.create_model_dir_path = mock.Mock()
-        self.ai.evaluate.assert_called_with(model_dir='test_dir/')
+        self.ai.evaluate.assert_called_once()
         self.ai_tester.log_testing_report.assert_called_once()
         self.ai_tester.summizer.summize.assert_called_once()
 
@@ -123,9 +127,8 @@ class AITesterTest(TestCase):
 
     def test_log_testing_report(self):
         open = mock.mock_open()
-        self.ai_tester.create_report_file_path = mock.Mock()
-
-        self.ai_tester.create_report_file_path.return_value = 'path/to/file'
+        # self.ai_tester.create_report_file_path = mock.Mock()
+        # self.ai_tester.create_report_file_path.return_value = 'path/to/file'
         self.ai_tester.results = {'a': 'a'}
         self.ai_tester.test_time = 'testTime'
         file = mock.Mock()
@@ -134,7 +137,24 @@ class AITesterTest(TestCase):
 
         with mock.patch('AITester.open', open, create=True):
             self.ai_tester.log_testing_report()
-            open.assert_called_once_with('path/to/file', 'a')
-            call1 = mock.call('\n--- ' + 'testTime' + ' ---')
-            call2 = mock.call('\n' + 'a' + ': ' + str('a'))
-            file.write.assert_has_calls([call1, call2])
+            open.assert_called_once_with('path/project/ai_reports.txt', 'a')
+            call1 = mock.call('\n--- AI: ' + 'name' + ' ---')
+            call2 = mock.call('\n--- time: ' + 'testTime' + ' ---')
+            call3 = mock.call('\n' + 'a' + ': ' + str('a'))
+            file.write.assert_has_calls([call1, call2, call3])
+
+
+class HardTestAITester(TestCase):
+
+    def test_log(self):
+        time_summizer = TimeSummizer()
+        tester = AITester('test_name', '../test_dir', summizer=time_summizer)
+
+        tester.determine_test_time()
+        print(tester.test_time)
+        tester.results = {'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd'}
+        tester.log_testing_report()
+
+
+if __name__ == '__main__':
+    unittest.main()

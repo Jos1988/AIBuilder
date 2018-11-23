@@ -11,7 +11,10 @@ import unittest
 
 class AIFactory:
 
-    def __init__(self):
+    def __init__(self, ai_name: str, project_name: str, log_dir: str):
+        self.project_name = project_name
+        self.log_dir = log_dir
+        self.ai_name = ai_name
         self.builders_by_name = {}
         self.loaded_builders = []
         self.unloaded_builders = []
@@ -19,7 +22,7 @@ class AIFactory:
         self.builders_sorted = []
 
     def create_AI(self, builders: list) -> AbstractAI:
-        artificial_intelligence = AI()
+        artificial_intelligence = AI(self.ai_name, self.project_name, self.log_dir)
 
         for builder in builders:
             builder.validate()

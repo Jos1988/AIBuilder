@@ -31,11 +31,11 @@ class TypeSpecification(Specification):
 class TestTypeSpecification(unittest.TestCase):
 
     def test_valid(self):
-        self.type_specification = TypeSpecification('test_name', 'test_one', ['test_one', 'test_two'])
+        self.type_specification = TypeSpecification('test_dir', 'test_one', ['test_one', 'test_two'])
         self.type_specification.validate()
 
     def test_invalid(self):
-        self.type_specification = TypeSpecification('test_name', 'test_invalid', ['test_one', 'test_two'])
+        self.type_specification = TypeSpecification('test_dir', 'test_invalid', ['test_one', 'test_two'])
 
         with self.assertRaises(AssertionError):
             self.type_specification.validate()
@@ -56,12 +56,12 @@ class RangeSpecification(Specification):
 class TestRangeSpecification(unittest.TestCase):
 
     def test_valid(self):
-        self.range_specification = RangeSpecification('test_name', 5, 1, 10)
+        self.range_specification = RangeSpecification('test_dir', 5, 1, 10)
 
         self.range_specification.validate()
 
     def test_invalid(self):
-        self.range_specification = RangeSpecification('test_name', 15, 1, 10)
+        self.range_specification = RangeSpecification('test_dir', 15, 1, 10)
 
         with self.assertRaises(AssertionError):
             self.range_specification.validate()
@@ -81,17 +81,17 @@ class DataTypeSpecification(Specification):
 class TestDataTypeSpecification(unittest.TestCase):
 
     def test_valid(self):
-        self.data_type_specification = DataTypeSpecification('test_name', 'test_one', str)
+        self.data_type_specification = DataTypeSpecification('test_dir', 'test_one', str)
         self.data_type_specification.validate()
 
-        self.data_type_specification = DataTypeSpecification('test_name', ['test_one'], list)
+        self.data_type_specification = DataTypeSpecification('test_dir', ['test_one'], list)
         self.data_type_specification.validate()
 
-        self.data_type_specification = DataTypeSpecification('test_name', {'test': 'one'}, dict)
+        self.data_type_specification = DataTypeSpecification('test_dir', {'test_dir': 'one'}, dict)
         self.data_type_specification.validate()
 
     def test_invalid(self):
-        self.data_type_specification = DataTypeSpecification('test_name', 'test_invalid', int)
+        self.data_type_specification = DataTypeSpecification('test_dir', 'test_invalid', int)
 
         with self.assertRaises(AssertionError):
             self.data_type_specification.validate()
@@ -121,7 +121,7 @@ class TestIsCallableSpecification(unittest.TestCase):
 
     def test_invalid(self):
         lmd_specification = IsCallableSpecification('int', 123)
-        lnc_specification = IsCallableSpecification('str', 'test')
+        lnc_specification = IsCallableSpecification('str', 'test_dir')
 
         with self.assertRaises(AssertionError):
             lmd_specification.validate()
@@ -142,7 +142,7 @@ class NullSpecification(Specification):
 class TestNullSpecification(unittest.TestCase):
 
     def setUp(self):
-        self.specification = NullSpecification('test')
+        self.specification = NullSpecification('test_dir')
 
     def test_valid(self):
         self.specification.validate()
@@ -174,12 +174,12 @@ class Descriptor(Specification):
 class TestDescriptor(unittest.TestCase):
 
     def test_valid(self):
-        self.descriptor = Descriptor('description', ['test 1'])
+        self.descriptor = Descriptor('description', ['test_dir 1'])
 
         self.assertEqual(self.descriptor.name, 'description')
-        self.assertEqual(self.descriptor.value, ['test 1'])
-        self.descriptor.add_description('test 2')
-        self.assertEqual(self.descriptor.value, ['test 1', 'test 2'])
+        self.assertEqual(self.descriptor.value, ['test_dir 1'])
+        self.descriptor.add_description('test_dir 2')
+        self.assertEqual(self.descriptor.value, ['test_dir 1', 'test_dir 2'])
         self.descriptor.validate()
 
     def test_valid_2(self):
@@ -187,8 +187,8 @@ class TestDescriptor(unittest.TestCase):
 
         self.assertEqual(self.descriptor.name, 'description')
         self.assertEqual(self.descriptor.value, [])
-        self.descriptor.add_description('test 1')
-        self.assertEqual(self.descriptor.value, ['test 1'])
+        self.descriptor.add_description('test_dir 1')
+        self.assertEqual(self.descriptor.value, ['test_dir 1'])
         self.descriptor.validate()
 
 

@@ -12,7 +12,7 @@ class InputFunctionBuilder(Builder):
     VALID_FN_NAMES = [BASE_FN]
 
     def __init__(self, train_fn: str, train_kwargs: dict, evaluation_fn: str, evaluation_kwargs: dict):
-        self.train_fn_name = TypeSpecification('test function', train_fn, self.VALID_FN_NAMES)
+        self.train_fn_name = TypeSpecification('test_dir function', train_fn, self.VALID_FN_NAMES)
         self.train_kwargs = DataTypeSpecification('train_kwargs', train_kwargs, dict)
 
         self.evaluation_fn_name = TypeSpecification('evaluation function', evaluation_fn, self.VALID_FN_NAMES)
