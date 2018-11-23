@@ -15,7 +15,7 @@ class AbstractAI(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, model_dir: str) -> dict:
+    def evaluate(self) -> dict:
         pass
 
     @abstractmethod
@@ -151,6 +151,3 @@ class AI(AbstractAI):
 
     def set_estimator(self, estimator: tf.estimator):
         self.estimator = estimator
-
-    def set_model_log_dir(self, model_dir: str):
-        self.estimator.model_dir = model_dir

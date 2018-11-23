@@ -38,9 +38,11 @@ class AITester(AbstractAITester):
     def evaluate_AI(self):
         self.summizer.log('start evaluation', None)
 
-        # model_dir = self.create_model_dir_path()
         self.results = self.AI.evaluate()
 
+        print()
+        self.print_description()
+        print()
         self.print_evaluation_results()
         self.log_testing_report()
 
@@ -52,6 +54,17 @@ class AITester(AbstractAITester):
         for label, value in self.results.items():
             print(label + ': ' + str(value))
 
+    def print_description(self):
+        for builder_name, description in self.AI.description.items():
+            print(builder_name)
+
+            if type(description) is not dict:
+                print(' - ' + description)
+                continue
+
+            for element, value in description.items():
+                print(' - ' + element + ' : ' + str(value))
+
     def log_testing_report(self):
         report_file = self.create_report_file_path()
 
@@ -59,12 +72,29 @@ class AITester(AbstractAITester):
         self.validate_test_time()
 
         report = open(report_file, 'a')
+        report.write('\n')
         report.write('\n--- AI: ' + self.AI.get_name() + ' ---')
         report.write('\n--- time: ' + self.test_time + ' ---')
+        self.write_description(report)
+        report.write('\n')
+        self.write_results(report)
+
+        report.close()
+
+    def write_results(self, report):
         for label, value in self.results.items():
             report.write('\n' + label + ': ' + str(value))
 
-        report.close()
+    def write_description(self, report):
+        for builder_name, description in self.AI.description.items():
+            report.write('\n' + builder_name)
+
+            if type(description) is not dict:
+                report.write('\n - ' + description)
+                continue
+
+            for element, value in description.items():
+                report.write('\n - ' + element + ': ' + str(value))
 
     def validate_results_set(self):
         assert type(self.results) is dict, 'Test results not set in AI tester.'
@@ -84,6 +114,7 @@ class AITesterTest(TestCase):
 
     def setUp(self):
         self.ai = mock.Mock('AITester.AbstractAI')
+        self.ai.description = {'builder_1': {'ingredient_1': 1}}
         self.ai.train = mock.Mock(name='train')
         self.ai.get_name = mock.Mock(name='get_name')
         self.ai.get_name.return_value = 'name'
@@ -104,8 +135,6 @@ class AITesterTest(TestCase):
         self.assertEqual(2, self.ai_tester.summizer.log.call_count)
 
     def test_evaluation(self):
-        # self.ai_tester.create_model_dir_path = mock.Mock()
-        # self.ai_tester.create_model_dir_path.return_value = 'test_dir/'
         self.ai_tester.log_testing_report = mock.Mock()
         self.ai_tester.summizer.summize = mock.Mock()
         self.ai.evaluate = mock.Mock()
@@ -127,8 +156,6 @@ class AITesterTest(TestCase):
 
     def test_log_testing_report(self):
         open = mock.mock_open()
-        # self.ai_tester.create_report_file_path = mock.Mock()
-        # self.ai_tester.create_report_file_path.return_value = 'path/to/file'
         self.ai_tester.results = {'a': 'a'}
         self.ai_tester.test_time = 'testTime'
         file = mock.Mock()
@@ -138,22 +165,25 @@ class AITesterTest(TestCase):
         with mock.patch('AITester.open', open, create=True):
             self.ai_tester.log_testing_report()
             open.assert_called_once_with('path/project/ai_reports.txt', 'a')
-            call1 = mock.call('\n--- AI: ' + 'name' + ' ---')
-            call2 = mock.call('\n--- time: ' + 'testTime' + ' ---')
-            call3 = mock.call('\n' + 'a' + ': ' + str('a'))
-            file.write.assert_has_calls([call1, call2, call3])
+            print_name = mock.call('\n--- AI: ' + 'name' + ' ---')
+            print_time = mock.call('\n--- time: ' + 'testTime' + ' ---')
+            print_report = mock.call('\n' + 'a' + ': ' + str('a'))
+            print_newline = mock.call('\n')
+            print_builder = mock.call('\nbuilder_1')
+            print_spec = mock.call('\n - ingredient_1: 1')
+            file.write.assert_has_calls([print_name, print_time, print_report, print_newline, print_builder, print_spec])
 
 
-class HardTestAITester(TestCase):
-
-    def test_log(self):
-        time_summizer = TimeSummizer()
-        tester = AITester('test_name', '../test_dir', summizer=time_summizer)
-
-        tester.determine_test_time()
-        print(tester.test_time)
-        tester.results = {'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd'}
-        tester.log_testing_report()
+# class HardTestAITester(TestCase):
+#
+#     def test_log(self):
+#         time_summizer = TimeSummizer()
+#         tester = AITester('test_name', '../test_dir', summizer=time_summizer)
+#
+#         tester.determine_test_time()
+#         print(tester.test_time)
+#         tester.results = {'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd'}
+#         tester.log_testing_report()
 
 
 if __name__ == '__main__':
