@@ -92,6 +92,61 @@ class TestMissingDataScrubber(unittest.TestCase):
         self.assertEqual(9, self._data_model.get_dataframe()['unknown_1'][0])
 
 
+class StringToDateScrubber(Scrubber):
+
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def __init__(self, date_columns: dict, ):
+        self.date_columns = date_columns
+
+    def validate(self, data_model: DataModel):
+        for date_column, format in self.date_columns.items():
+            data_model.validate_columns([date_column])
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+
+        for date_column, format in self.date_columns.items():
+            split_format = format.split('T')
+            date_format = split_format[0]
+
+            def convert(value):
+                return datetime.strptime(
+                    value[date_column].split('T')[0],
+                    date_format
+                )
+
+            df[date_column] = df.apply(convert, axis=1)
+
+
+class TestDateScrubber(unittest.TestCase):
+
+    def setUp(self):
+        self._data = {
+            'date': ['2017-03-26T05:04:46.539Z', '2017-12-01T23:04:46.539Z', '2017-02-08T07:38:48.129Z'],
+        }
+
+        self._dataframe = pd.DataFrame(data=self._data)
+        self.data_model = DataModel(self._dataframe)
+
+    def test_validate(self):
+        data_scrubber = StringToDateScrubber(date_columns={'date': '%Y-%m-%d'})
+
+        data_scrubber.validate(self.data_model)
+
+    def test_scrub(self):
+        data_scrubber = StringToDateScrubber(date_columns={'date': '%Y-%m-%d'})
+
+        data_scrubber.scrub(self.data_model)
+        date = datetime.strptime('2017-12-01', '%Y-%m-%d')
+        self.assertEqual(date, self.data_model.get_dataframe()['date'][1])
+
+
 class AverageColumnScrubber(Scrubber):
 
     @property
@@ -200,9 +255,7 @@ class ConvertCurrencyScrubber(Scrubber):
         self.converter = CurrencyConverter(fallback_on_missing_rate=True, fallback_on_wrong_date=True)
 
     def validate(self, data_model: DataModel):
-        required_columns = [self.value_column,
-                            self.from_currency_column,
-                            self.value_column]
+        required_columns = [self.value_column, self.from_currency_column]
 
         if self.exchange_rate_date_column is not None:
             required_columns.append(self.exchange_rate_date_column)
@@ -226,7 +279,7 @@ class ConvertCurrencyScrubber(Scrubber):
                                           new_currency=self.to_currency,
                                           date=date_argument)
 
-        df[self.new_value_column] = df.build(convert_func, axis=1)
+        df[self.new_value_column] = df.apply(convert_func, axis=1)
         data_model.set_dataframe(df)
 
         return data_model

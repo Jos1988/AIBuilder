@@ -29,7 +29,7 @@ class ScrubAdapter(Builder):
 
     def build(self, neural_net: AbstractAI):
         training_data = neural_net.training_data
-        validation_data = neural_net.validation_data
+        validation_data = neural_net.evaluation_data
 
         self.and_scrubber.validate_metadata(training_data.metadata)
         self.and_scrubber.scrub(training_data)

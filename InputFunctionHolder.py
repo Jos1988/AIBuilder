@@ -15,18 +15,18 @@ def _dataset_to_dict(features):
     return {key: np.array(value) for key, value in dict(features).items()}
 
 
-def base_input_function(ml_dataset: Data.DataModel, batch_size=1, epoch=1):
+def base_fn(data_model: Data.DataModel, batch_size=1, epoch=1):
     """ input function one, made for shoes AI.
 
-    :param ml_dataset: Data.MLDataset
+    :param data_model: Data.MLDataset
     :param epoch: int
     :param batch_size: int
     :return:
     """
 
-    features = _dataset_to_dict(features=ml_dataset.get_feature_columns())
+    features = _dataset_to_dict(features=data_model.get_feature_columns())
 
-    data_set = tf.data.Dataset.from_tensor_slices((features, ml_dataset.get_target_column()))
+    data_set = tf.data.Dataset.from_tensor_slices((features, data_model.get_target_column()))
 
     data_set = data_set.shuffle(100).repeat(epoch).batch(batch_size)
 
@@ -56,7 +56,7 @@ class TestBaseInputFunction(unittest.TestCase):
 
     def test_feature_columns(self):
         self.setUp()
-        iterator = base_input_function(self._dataset)
+        iterator = base_fn(self._dataset)
         session = tf.Session()
         result1 = session.run(iterator)
 

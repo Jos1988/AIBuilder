@@ -113,6 +113,9 @@ class TestMetaData(unittest.TestCase):
         self.assertListEqual(['numerical_1', 'numerical_2', 'numerical_3'], self.meta_data.numerical_columns)
         self.assertListEqual(['unknown_1'], self.meta_data.uncategorized_columns)
 
+    def test_unknown_is_default(self):
+        self.assertEqual(self.meta_data.get_column_type('categorical_2'), 'unknown')
+
     def test_to_string(self):
         self.meta_data.define_categorical_columns(['categorical_1', 'categorical_2', 'categorical_3'])
         self.meta_data.define_numerical_columns(['numerical_1', 'numerical_2', 'numerical_3'])
@@ -160,7 +163,6 @@ class DataModel:
         return self._tf_feature_columns
 
     def set_feature_columns(self, feature_column_names: list):
-        self.validate_columns(feature_column_names)
         self.feature_columns_names = feature_column_names
 
     def get_feature_columns(self):
@@ -169,7 +171,6 @@ class DataModel:
         return self._dataframe[self.feature_columns_names]
 
     def set_target_column(self, target_column_name: str):
-        self.validate_columns([target_column_name])
         self.target_column_name = target_column_name
 
     def get_target_column(self):
@@ -276,34 +277,20 @@ class DataLoader:
     _conserve_memory = False
 
     def load_csv(self, path: str):
-        """
-
-        :param path: str
-        """
         dataframe = pd.read_csv(path)
         self._ml_data_model = DataModel(dataframe)
 
     def filter_columns(self, columns: list):
-        """
-
-        :param columns: list
-        """
         dataframe = self._ml_data_model.get_dataframe()
+        columns = [column for column in columns if column in dataframe.columns]
         dataframe = dataframe[columns]
         self._ml_data_model = DataModel(dataframe)
 
     def get_dataset(self):
-        """
 
-        :return: void
-        """
         return self._ml_data_model
 
     def set_dataset(self, dataset: DataModel):
-        """
-
-        :param dataset: pd.DataFrame
-        """
         self._ml_data_model = dataset
 
 

@@ -10,6 +10,7 @@ class Builder(ABC):
     OPTIMIZER = 'optimizer'
     DATA_MODEL = 'data_model'
     SCRUBBER = 'scrubber'
+    INPUT_FUNCTION = 'input_function'
 
     @property
     @abstractmethod

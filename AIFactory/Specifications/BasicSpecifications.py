@@ -74,8 +74,8 @@ class DataTypeSpecification(Specification):
         self.data_type = data_type
 
     def validate(self):
-        assert type(self.value) is self.data_type, 'Value {} must be of type {}, {} given'\
-            .format(self.name, self.data_type, self.value)
+        assert type(self.value) is self.data_type, 'Value \'{}\' must be of type {}, {} given'\
+            .format(self.name, self.data_type, type(self.value))
 
 
 class TestDataTypeSpecification(unittest.TestCase):
@@ -97,6 +97,39 @@ class TestDataTypeSpecification(unittest.TestCase):
             self.data_type_specification.validate()
 
 
+class IsCallableSpecification(Specification):
+    def validate(self):
+        assert callable(self.value), 'Value \'{}\' must be of callable, {} given'\
+            .format(self.name, self.value)
+
+
+class TestIsCallableSpecification(unittest.TestCase):
+
+    def test_valid(self):
+        l = lambda x: 1+1
+
+        def fnc():
+            return 1+1
+
+        f = fnc
+
+        lmd_specification = IsCallableSpecification('lmd', l)
+        lnc_specification = IsCallableSpecification('fnc', f)
+
+        lmd_specification.validate()
+        lnc_specification.validate()
+
+    def test_invalid(self):
+        lmd_specification = IsCallableSpecification('int', 123)
+        lnc_specification = IsCallableSpecification('str', 'test')
+
+        with self.assertRaises(AssertionError):
+            lmd_specification.validate()
+
+        with self.assertRaises(AssertionError):
+            lnc_specification.validate()
+
+
 class NullSpecification(Specification):
 
     def __init__(self, name: str):
@@ -108,16 +141,19 @@ class NullSpecification(Specification):
 
 class TestNullSpecification(unittest.TestCase):
 
-    def test_valid(self):
+    def setUp(self):
         self.specification = NullSpecification('test')
+
+    def test_valid(self):
         self.specification.validate()
 
     def test_invalid(self):
-        self.specification = NullSpecification('test')
         self.specification.value = 'something'
-
         with self.assertRaises(AssertionError):
             self.specification.validate()
+
+    def test_is_none(self):
+        self.assertTrue(self.specification() is None)
 
 
 class Descriptor(Specification):

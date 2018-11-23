@@ -38,8 +38,8 @@ class OptimizerBuilder(Builder):
     def build(self, neural_net: AbstractAI):
         my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type(), learning_rate=self.learning_rate())
 
-        if self.gradient_clipping is not None:
-            my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, self.gradient_clipping)
+        if self.gradient_clipping() is not None:
+            my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, self.gradient_clipping())
 
         neural_net.set_optimizer(my_optimizer)
 

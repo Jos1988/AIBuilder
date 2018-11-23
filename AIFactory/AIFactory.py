@@ -31,7 +31,7 @@ class AIFactory:
             builder.build(artificial_intelligence)
 
             builder_description = builder.describe()
-            ai_description[builder.builder_type()] = builder_description
+            ai_description[builder.builder_type] = builder_description
 
         artificial_intelligence.description = ai_description
 
@@ -103,11 +103,11 @@ class TestAIFactory(unittest.TestCase):
 
         data_builder = DataBuilder(data_source='../data/test_data.csv', target_column='target_1',
                                    validation_data_percentage=20,
-                                   feature_columns=[
-                                       ['feature_1', DataBuilder.CATEGORICAL_COLUMN_VOC_LIST],
-                                       ['feature_2', DataBuilder.NUMERICAL_COLUMN],
-                                       ['feature_3', DataBuilder.NUMERICAL_COLUMN]
-                                   ],
+                                   feature_columns={
+                                       'feature_1': DataBuilder.CATEGORICAL_COLUMN_VOC_LIST,
+                                       'feature_2': DataBuilder.NUMERICAL_COLUMN,
+                                       'feature_3': DataBuilder.NUMERICAL_COLUMN
+                                   },
                                    metadata=metadata)
 
         estimator_builder = EstimatorBuilder(estimator_type=EstimatorBuilder.LINEAR_REGRESSOR)
