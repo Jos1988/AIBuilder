@@ -175,6 +175,7 @@ class AITesterTest(TestCase):
                 [print_name, print_time, print_report, print_newline, print_builder, print_spec],
                 any_order=True)
 
+# todo: identify ai to check if it has already been trained and evaluated.
 
 # class HardTestAITester(TestCase):
 #
