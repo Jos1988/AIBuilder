@@ -171,7 +171,9 @@ class AITesterTest(TestCase):
             print_newline = mock.call('\n')
             print_builder = mock.call('\nbuilder_1')
             print_spec = mock.call('\n - ingredient_1: 1')
-            file.write.assert_has_calls([print_name, print_time, print_report, print_newline, print_builder, print_spec])
+            file.write.assert_has_calls(
+                [print_name, print_time, print_report, print_newline, print_builder, print_spec],
+                any_order=True)
 
 
 # class HardTestAITester(TestCase):
