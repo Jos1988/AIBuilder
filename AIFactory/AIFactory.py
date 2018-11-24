@@ -11,7 +11,7 @@ import unittest
 
 class AIFactory:
 
-    def __init__(self, ai_name: str, project_name: str, log_dir: str):
+    def __init__(self, project_name: str, log_dir: str, ai_name: str = None):
         self.project_name = project_name
         self.log_dir = log_dir
         self.ai_name = ai_name
@@ -22,7 +22,7 @@ class AIFactory:
         self.builders_sorted = []
 
     def create_AI(self, builders: list) -> AbstractAI:
-        artificial_intelligence = AI(self.ai_name, self.project_name, self.log_dir)
+        artificial_intelligence = AI(self.project_name, self.log_dir, self.ai_name)
 
         for builder in builders:
             builder.validate()
@@ -83,6 +83,9 @@ class AIFactory:
                                .format(builder.__class__.__name__))
 
         for dependency in dependencies:
+            assert dependency in self.builders_by_name, '{} has unknown dependency: {}'\
+                .format(builder.__class__.__name__, dependency)
+
             dependent_builder = self.builders_by_name[dependency]
 
             if self.has_unloaded_dependencies(dependent_builder):

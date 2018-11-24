@@ -11,6 +11,7 @@ class Builder(ABC):
     DATA_MODEL = 'data_model'
     SCRUBBER = 'scrubber'
     INPUT_FUNCTION = 'input_function'
+    NAMING_SCHEME = 'naming'
 
     @property
     @abstractmethod

@@ -87,7 +87,7 @@ class AI(AbstractAI):
     estimator: tf.estimator
     optimizer: tf.train.Optimizer
 
-    def __init__(self, name: str, project_name: str, log_dir: str):
+    def __init__(self, project_name: str, log_dir: str, name: str = None):
         super().__init__()
         self.project_name = project_name
         self.log_dir = log_dir

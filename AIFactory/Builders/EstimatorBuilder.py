@@ -17,7 +17,7 @@ class EstimatorBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.OPTIMIZER, self.DATA_MODEL]
+        return [self.OPTIMIZER, self.DATA_MODEL, self.NAMING_SCHEME]
 
     @property
     def builder_type(self) -> str:
