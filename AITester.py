@@ -4,6 +4,7 @@ from AIBuilder.Summizer import Summizer, TimeSummizer
 from unittest import TestCase, mock
 import unittest
 from datetime import datetime
+import hashlib
 
 
 # AbstractAITester
@@ -18,8 +19,12 @@ class AbstractAITester(ABC):
         pass
 
 
+# todo refactor write and print logic to writer and printer.
+
+
 class AITester(AbstractAITester):
     AI: AbstractAI
+    description_hash_label = '\n--- description hash: '
 
     def __init__(self, summizer: Summizer):
         self.summizer = summizer
@@ -28,6 +33,21 @@ class AITester(AbstractAITester):
 
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
+
+    def is_unique(self) -> bool:
+        report = self.open_report_file('r')
+        description_hash = AITester.stable_hash_description(self.AI.description)
+        # description_hash = hash(repr(self.AI.description))
+        # print(description_hash)
+        # description_hash = hash(repr(self.AI.description))
+        # print(description_hash)
+        for line in report:
+            # print(line)
+            # print(line.find(str(description_hash)))
+            if -1 is not line.find(str(description_hash)):
+                return False
+
+        return True
 
     def train_AI(self):
         self.summizer.log('start training', None)
@@ -55,6 +75,8 @@ class AITester(AbstractAITester):
             print(label + ': ' + str(value))
 
     def print_description(self):
+        print('--- AI: ' + self.AI.get_name() + ' ---')
+        print('--- time: ' + self.test_time + ' ---')
         for builder_name, description in self.AI.description.items():
             print(builder_name)
 
@@ -66,12 +88,10 @@ class AITester(AbstractAITester):
                 print(' - ' + element + ' : ' + str(value))
 
     def log_testing_report(self):
-        report_file = self.create_report_file_path()
-
         self.validate_results_set()
         self.validate_test_time()
 
-        report = open(report_file, 'a')
+        report = self.open_report_file('a')
         report.write('\n')
         report.write('\n--- AI: ' + self.AI.get_name() + ' ---')
         report.write('\n--- time: ' + self.test_time + ' ---')
@@ -86,6 +106,8 @@ class AITester(AbstractAITester):
             report.write('\n' + label + ': ' + str(value))
 
     def write_description(self, report):
+        description_hash = AITester.stable_hash_description(self.AI.description)
+        report.write('\n--- description hash: ' + str(description_hash))
         for builder_name, description in self.AI.description.items():
             report.write('\n' + builder_name)
 
@@ -105,9 +127,18 @@ class AITester(AbstractAITester):
     def validate_test_time(self):
         assert type(self.test_time) is str, 'Test time not set in AITester.'
 
-    def create_report_file_path(self):
+    def open_report_file(self, mode: str):
+        path = self.AI.get_log_dir() + '/' + self.AI.get_project_name() + '/ai_reports.txt'
+        report = open(path, mode=mode)
+        return report
 
-        return self.AI.get_log_dir() + '/' + self.AI.get_project_name() + '/ai_reports.txt'
+    @staticmethod
+    def stable_hash_description(description: dict):
+        description = repr(description)
+        description = description.encode('utf-8')
+        hash_result = hashlib.md5(description)
+
+        return hash_result.hexdigest()
 
 
 class AITesterTest(TestCase):
@@ -164,7 +195,7 @@ class AITesterTest(TestCase):
 
         with mock.patch('AITester.open', open, create=True):
             self.ai_tester.log_testing_report()
-            open.assert_called_once_with('path/project/ai_reports.txt', 'a')
+            open.assert_called_once_with('path/project/ai_reports.txt', mode='a')
             print_name = mock.call('\n--- AI: ' + 'name' + ' ---')
             print_time = mock.call('\n--- time: ' + 'testTime' + ' ---')
             print_report = mock.call('\n' + 'a' + ': ' + str('a'))
@@ -174,6 +205,41 @@ class AITesterTest(TestCase):
             file.write.assert_has_calls(
                 [print_name, print_time, print_report, print_newline, print_builder, print_spec],
                 any_order=True)
+
+    def test_is_unique(self):
+        open = mock.mock_open()
+        file = ['line1', 'description: 123', 'line3']
+        open.return_value = file
+
+        with mock.patch('AITester.open', open, create=True):
+            result = self.ai_tester.is_unique()
+            self.assertTrue(result)
+
+    def test_is_not_unique(self):
+        open = mock.mock_open()
+        file = ['line1', 'description: 4015285680072685342', 'line3']
+        open.return_value = file
+
+        with mock.patch('AITester.open', open, create=True):
+            result = self.ai_tester.is_unique()
+            self.assertTrue(result)
+
+    def test_stable_hash_description(self):
+        result_hash = '986514f2494f256f444d9652abf742fc'
+        description = {'a': 'a'}
+        hash = AITester.stable_hash_description(description)
+        self.assertEqual(result_hash, hash)
+
+        # report = self.open_report_file('r')
+        # description_hash = hash(repr(self.ai.description))
+        # print(report.read())
+        # for line in report:
+        #     if -1 is not line.find(str(description_hash)):
+        #         return False
+        #
+        # return True
+
+
 
 # todo: identify ai to check if it has already been trained and evaluated.
 

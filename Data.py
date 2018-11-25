@@ -21,8 +21,15 @@ class MetaData:
         self.categorical_columns = list()
         self.numerical_columns = list()
 
+    def __repr__(self):
+        return repr({
+            'categorical': self.categorical_columns,
+            'numerical': self.numerical_columns,
+            'unknown': self.uncategorized_columns
+        })
+
     def __str__(self):
-        stringy_self = ''
+        stringy_self = '\nmetadata:'
 
         for categorical_column in self.categorical_columns:
             stringy_self = stringy_self + '\n' + categorical_column + ': ' + MetaData.CATEGORICAL_DATA_TYPE
@@ -177,6 +184,13 @@ class DataModel:
         self.validate_columns([self.target_column_name])
 
         return self._dataframe[self.target_column_name]
+
+    def __repr__(self):
+        return repr({
+            'data_model': self.metadata,
+            'source': 'todo',
+            'scrubbing': 'todo'
+        })
 
 
 class TestDataset(unittest.TestCase):
