@@ -10,6 +10,10 @@ import unittest
 
 # todo: move unit tests to dedicated folder and files for collective running.
 
+# todo: set all builders in some kind of recipe and allow cloning and modding to variate the recipes.
+#  Or rather, set a default on the factory, possibly from another file and create a 'rotate builders' method.
+#  Where the factory is given an numer of new builders and cycles through all possible combinations.
+
 class AIFactory:
 
     def __init__(self, project_name: str, log_dir: str, ai_name: str = None):
