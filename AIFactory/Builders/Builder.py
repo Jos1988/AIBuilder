@@ -3,7 +3,8 @@ from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Specifications.BasicSpecifications import Specification
 from unittest import TestCase, mock
 
-# todo: move files to one file for easier importing
+# todo: move files to one file for easier importing. After moveing the unit tests move the builders to a single module,
+#  as well as the specification classes.
 
 class Builder(ABC):
     # add you new builder types here.
