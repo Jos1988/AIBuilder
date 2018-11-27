@@ -23,10 +23,8 @@ class AIFactory:
         self.builders_sorted = []
 
     def create_AI(self, builders: list) -> AbstractAI:
+        self.validate_builders(builders)
         artificial_intelligence = AI(self.project_name, self.log_dir, self.ai_name)
-
-        for builder in builders:
-            builder.validate()
 
         self.sortBuilders(builders)
 
@@ -40,6 +38,11 @@ class AIFactory:
         artificial_intelligence.description = ai_description
 
         return artificial_intelligence
+
+    @staticmethod
+    def validate_builders(builders: list):
+        for builder in builders:
+            builder.validate()
 
     def sortBuilders(self, builders: list):
         for builder in builders:

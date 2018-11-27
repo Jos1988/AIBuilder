@@ -31,6 +31,15 @@ class AITester(AbstractAITester):
         self.test_time = None
         self.results = {}
 
+    def run_AI_test(self, ai: AbstractAI):
+        self.set_AI(ai)
+        if self.is_unique():
+            self.train_AI()
+            self.evaluate_AI()
+        else:
+            print('AI evaluated!')
+            print(ai.description)
+
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
 
