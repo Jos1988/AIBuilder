@@ -19,7 +19,7 @@ class AbstractAITester(ABC):
         pass
 
 
-# todo refactor write and print logic to writer and printer.
+# todo refactor write and print logic to writer and printer...
 
 
 class AITester(AbstractAITester):
