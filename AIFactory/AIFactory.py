@@ -8,7 +8,7 @@ from AIBuilder.Data import MetaData
 import AIBuilder.DataScrubbing as scrubber
 import unittest
 
-# todo: move unit tests to dedicated folder and files for collective running.
+# todo: move unit tests to dedicated folder and files for collective running...
 
 class AIFactory:
 
