@@ -148,7 +148,6 @@ class TestDataBuilder(unittest.TestCase):
         data_builder.add_feature_column(name='feature_2', column_type=DataBuilder.NUMERICAL_COLUMN)
         data_builder.add_feature_column(name='feature_3', column_type=DataBuilder.NUMERICAL_COLUMN)
 
-        # todo: create factory
         arti = AI()
         data_builder.validate()
         data_builder.build(ai=arti)
