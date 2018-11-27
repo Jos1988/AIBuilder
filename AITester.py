@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AbstractAI
-from AIBuilder.Summizer import Summizer, TimeSummizer
+from AIBuilder.Summizer import Summizer
 from unittest import TestCase, mock
 import unittest
 from datetime import datetime
@@ -31,19 +31,22 @@ class AITester(AbstractAITester):
         self.test_time = None
         self.results = {}
 
+    def run_AI_test(self, ai: AbstractAI):
+        self.set_AI(ai)
+        if self.is_unique():
+            self.train_AI()
+            self.evaluate_AI()
+        else:
+            print('AI evaluated!')
+            print(ai.description)
+
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
 
     def is_unique(self) -> bool:
         report = self.open_report_file('r')
         description_hash = AITester.stable_hash_description(self.AI.description)
-        # description_hash = hash(repr(self.AI.description))
-        # print(description_hash)
-        # description_hash = hash(repr(self.AI.description))
-        # print(description_hash)
         for line in report:
-            # print(line)
-            # print(line.find(str(description_hash)))
             if -1 is not line.find(str(description_hash)):
                 return False
 
@@ -229,30 +232,6 @@ class AITesterTest(TestCase):
         description = {'a': 'a'}
         hash = AITester.stable_hash_description(description)
         self.assertEqual(result_hash, hash)
-
-        # report = self.open_report_file('r')
-        # description_hash = hash(repr(self.ai.description))
-        # print(report.read())
-        # for line in report:
-        #     if -1 is not line.find(str(description_hash)):
-        #         return False
-        #
-        # return True
-
-
-
-# todo: identify ai to check if it has already been trained and evaluated.
-
-# class HardTestAITester(TestCase):
-#
-#     def test_log(self):
-#         time_summizer = TimeSummizer()
-#         tester = AITester('test_name', '../test_dir', summizer=time_summizer)
-#
-#         tester.determine_test_time()
-#         print(tester.test_time)
-#         tester.results = {'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd'}
-#         tester.log_testing_report()
 
 
 if __name__ == '__main__':
