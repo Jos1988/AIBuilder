@@ -97,7 +97,9 @@ class DataBuilder(Builder):
 
         return {'training_data': result[0], 'validation_data': result[1]}
 
-    # todo: possible separate builder
+    # todo: possible separate builder, refactor creating of feature columns to sepperate builder.
+    #  Feature columns must be rendered after scrubbing because the columns might have changed and
+    #  catergoric columns should have no None values in them.
     def render_tf_feature_columns(self, data: DataModel) -> list:
         tf_feature_columns = []
         for feature_column in self.feature_columns():
@@ -127,6 +129,7 @@ class DataBuilder(Builder):
         categories = data.get_all_column_categories(feature_column_data['name'])
 
         # todo: refactor so tf columns are manufactured in different builder after scrubbing.
+        #  this one too.
         filtered_categories = [cat for cat in categories if type(cat) is str]
 
         return tf.feature_column.categorical_column_with_vocabulary_list(
