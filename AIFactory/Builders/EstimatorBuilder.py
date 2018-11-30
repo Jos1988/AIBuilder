@@ -1,5 +1,3 @@
-import unittest
-from unittest import mock
 from AIBuilder.AIFactory.Specifications.BasicSpecifications import TypeSpecification
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
@@ -45,49 +43,3 @@ class EstimatorBuilder(Builder):
     @staticmethod
     def render_model_dir(ai) -> str:
         return ai.get_log_dir() + '/' + ai.get_project_name() + '/tensor_board/' + ai.get_name()
-
-
-class TestEstimatorBuilder(unittest.TestCase):
-
-    def test_validate(self):
-        estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
-        estimator_builder.validate()
-
-    def test_invalid_estimator_type(self):
-        invalid_estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
-        invalid_estimator_builder.estimator_type = TypeSpecification(name=EstimatorBuilder.ESTIMATOR,
-                                                                     value='invalid',
-                                                                     valid_types=EstimatorBuilder.valid_estimator_types)
-
-        valid_estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
-
-        with self.assertRaises(AssertionError):
-            invalid_estimator_builder.validate()
-
-        with self.assertRaises(AssertionError):
-            valid_estimator_builder.set_estimator('invalid')
-            valid_estimator_builder.validate()
-
-        with self.assertRaises(AssertionError):
-            builder = EstimatorBuilder('invalid')
-            builder.validate()
-
-    def test_build(self):
-        mock_data_model = mock.MagicMock()
-        mock_optimizer = mock.MagicMock()
-
-        estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
-
-        mock_data_model.get_tf_feature_columns.return_value = []
-
-        arti = mock.Mock('EstimatorBuilder.AbstractAI')
-        arti.set_estimator = mock.Mock()
-        arti.optimizer = mock_optimizer
-        arti.training_data = mock_data_model
-
-        estimator_builder.build(arti)
-        arti.set_estimator.assert_called_once()
-
-
-if __name__ == '__main__':
-    unittest.main()
