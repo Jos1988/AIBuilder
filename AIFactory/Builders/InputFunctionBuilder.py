@@ -1,5 +1,3 @@
-import unittest
-from unittest import mock
 from AIBuilder.AIFactory.Specifications.BasicSpecifications import TypeSpecification, DataTypeSpecification
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
@@ -47,35 +45,3 @@ class InputFunctionBuilder(Builder):
 
         neural_net.set_training_fn(train_function)
         neural_net.set_evaluation_fn(evaluation_function)
-
-
-class TestEstimatorBuilder(unittest.TestCase):
-
-    def setUp(self):
-        self.input_fn_builder = InputFunctionBuilder(train_fn=InputFunctionBuilder.BASE_FN,
-                                                     train_kwargs={'batch_size': 100, 'epoch': 1},
-                                                     evaluation_fn=InputFunctionBuilder.BASE_FN,
-                                                     evaluation_kwargs={'batch_size': 100, 'epoch': 1})
-
-    def test_validate(self):
-        self.input_fn_builder.validate()
-
-    def test_build(self):
-        train_data = mock.Mock()
-        eval_data = mock.Mock()
-
-        arti = mock.Mock()
-        arti.training_data = train_data
-        arti.evaluation_data = eval_data
-
-        arti.set_training_fn = mock.Mock()
-        arti.set_evaluation_fn = mock.Mock()
-
-        self.input_fn_builder.build(arti)
-
-        arti.set_training_fn.assert_called_once()
-        arti.set_evaluation_fn.assert_called_once()
-
-
-if __name__ == '__main__':
-    unittest.main()

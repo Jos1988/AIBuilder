@@ -1,5 +1,4 @@
-import unittest
-from AIBuilder.AI import AbstractAI, AI
+from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 from AIBuilder.Data import MetaData, DataModel, DataLoader, DataSetSplitter
 from AIBuilder.AIFactory.Specifications.BasicSpecifications import RangeSpecification, DataTypeSpecification
@@ -133,56 +132,3 @@ class DataBuilder(Builder):
             feature_column_data['name'],
             vocabulary_list=filtered_categories
         )
-
-
-class TestDataBuilder(unittest.TestCase):
-
-    def test_build(self):
-        data_builder = DataBuilder(data_source='../../../data/test_data.csv',
-                                   target_column='target_1',
-                                   validation_data_percentage=20,
-                                   feature_columns={},
-                                   metadata=MetaData())
-
-        data_builder.add_feature_column(name='feature_1', column_type=DataBuilder.CATEGORICAL_COLUMN_VOC_LIST)
-        data_builder.add_feature_column(name='feature_2', column_type=DataBuilder.NUMERICAL_COLUMN)
-        data_builder.add_feature_column(name='feature_3', column_type=DataBuilder.NUMERICAL_COLUMN)
-
-        # todo: create factory
-        arti = AI()
-        data_builder.validate()
-        data_builder.build(ai=arti)
-
-        feature_names = ['feature_1', 'feature_2', 'feature_3']
-        self.validate_data_frame(arti.training_data, feature_names)
-        self.validate_data_frame(arti.evaluation_data, feature_names)
-
-    def test_constructor_build(self):
-        data_builder = DataBuilder(data_source='../../../data/test_data.csv',
-                                   target_column='target_1',
-                                   validation_data_percentage=20,
-                                   feature_columns={
-                                        'feature_1': DataBuilder.CATEGORICAL_COLUMN_VOC_LIST,
-                                        'feature_2': DataBuilder.NUMERICAL_COLUMN,
-                                        'feature_3': DataBuilder.NUMERICAL_COLUMN
-                                   },
-                                   metadata=MetaData())
-
-        arti = AI()
-        data_builder.validate()
-        data_builder.build(ai=arti)
-
-        feature_names = ['feature_1', 'feature_2', 'feature_3']
-        self.validate_data_frame(arti.training_data, feature_names)
-        self.validate_data_frame(arti.evaluation_data, feature_names)
-
-    def validate_data_frame(self, data_frame: DataModel, feature_name_list: list):
-        self.assertEqual(data_frame.feature_columns_names, feature_name_list)
-        self.assertEqual(data_frame.target_column_name, 'target_1')
-
-        for tf_feature_column in data_frame.get_tf_feature_columns():
-            self.assertTrue(tf_feature_column.name in feature_name_list)
-
-
-if __name__ == '__main__':
-    unittest.main()

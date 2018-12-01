@@ -1,6 +1,4 @@
 import os
-import unittest
-from unittest import mock
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Builders.Builder import Builder
 
@@ -65,34 +63,3 @@ class NamingSchemeBuilder(Builder):
             return int(exploded[1])
 
         return False
-
-
-class TestNamingScheme(unittest.TestCase):
-
-    def setUp(self):
-        self.naming_scheme = NamingSchemeBuilder()
-        self.arti = mock.Mock('NamingSchemeBuilder.AIBuilder.AI')
-        self.arti.get_log_dir = mock.Mock()
-        self.arti.get_log_dir.return_value = '../../../builder projects/log'
-        self.arti.get_project_name = mock.Mock()
-        self.arti.set_name = mock.Mock()
-        self.arti.get_name = mock.Mock()
-        self.arti.get_name.return_value = None
-
-    @mock.patch('NamingSchemeBuilder.os.walk')
-    def test_generate_name(self, walk):
-        walk.return_value = iter([[None, ['shoesies', 'shoes_1', 'shoes_2']]])
-        self.arti.get_project_name.return_value = 'shoes'
-        self.naming_scheme.build(self.arti)
-        self.arti.set_name.assert_called_once_with('shoes_3')
-
-    @mock.patch('NamingSchemeBuilder.os.walk')
-    def test_numerate_name(self, walk):
-        walk.return_value = iter([[None, ['shoesies', 'shoes_1', 'shoes_2']]])
-        self.arti.get_project_name.return_value = 'shoesies'
-        self.naming_scheme.build(self.arti)
-        self.arti.set_name.assert_called_once_with('shoesies_1')
-
-
-if __name__ == '__main__':
-    unittest.main()
