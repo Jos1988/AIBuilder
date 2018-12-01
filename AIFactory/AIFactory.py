@@ -1,5 +1,5 @@
 from AIBuilder.AI import AI, AbstractAI
-from AIBuilder.AIFactory.Builders.Builder import Builder
+from AIBuilder.AIFactory.Builders import Builder
 
 
 class AIFactory:

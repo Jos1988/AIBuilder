@@ -1,4 +1,4 @@
-from AIBuilder.AIFactory.Builders.Builder import Builder
+from AIBuilder.AIFactory.Builders import Builder
 from AIBuilder.Data import MetaData
 import unittest
 from unittest import mock, TestCase

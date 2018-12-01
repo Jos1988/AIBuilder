@@ -1,16 +1,12 @@
 from unittest import TestCase, mock
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.Data import MetaData, DataModel
-from AIBuilder.AIFactory.Specifications.BasicSpecifications import TypeSpecification
+from AIBuilder.AIFactory.Specifications import TypeSpecification
 import unittest
-from AIBuilder.AIFactory.Builders.Builder import Builder
+from AIBuilder.AIFactory.Builders import Builder
 import AIBuilder.DataScrubbing as scrubber
-from AIBuilder.AIFactory.Builders.DataBuilder import DataBuilder
-from AIBuilder.AIFactory.Builders.EstimatorBuilder import EstimatorBuilder
-from AIBuilder.AIFactory.Builders.InputFunctionBuilder import InputFunctionBuilder
-from AIBuilder.AIFactory.Builders.NamingSchemeBuilder import NamingSchemeBuilder
-from AIBuilder.AIFactory.Builders.OptimizerBuilder import OptimizerBuilder
-from AIBuilder.AIFactory.Builders.ScrubAdapter import ScrubAdapter
+from AIBuilder.AIFactory.Builders import DataBuilder, EstimatorBuilder, InputFunctionBuilder, NamingSchemeBuilder, \
+    OptimizerBuilder, ScrubAdapter
 
 
 class TestBuilder(Builder):
@@ -189,14 +185,14 @@ class TestNamingScheme(unittest.TestCase):
         self.arti.get_name = mock.Mock()
         self.arti.get_name.return_value = None
 
-    @mock.patch('AIBuilder.AIFactory.Builders.NamingSchemeBuilder.os.walk')
+    @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
     def test_generate_name(self, walk):
         walk.return_value = iter([[None, ['shoesies', 'shoes_1', 'shoes_2']]])
         self.arti.get_project_name.return_value = 'shoes'
         self.naming_scheme.build(self.arti)
         self.arti.set_name.assert_called_once_with('shoes_3')
 
-    @mock.patch('AIBuilder.AIFactory.Builders.NamingSchemeBuilder.os.walk')
+    @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
     def test_numerate_name(self, walk):
         walk.return_value = iter([[None, ['shoesies', 'shoes_1', 'shoes_2']]])
         self.arti.get_project_name.return_value = 'shoesies'
@@ -228,8 +224,8 @@ class TestOptimizerBuilder(unittest.TestCase):
         with self.assertRaises(AssertionError):
             optimizer_builder.validate()
 
-    @mock.patch('AIBuilder.AIFactory.Builders.OptimizerBuilder.tf.contrib.estimator.clip_gradients_by_norm')
-    @mock.patch('AIBuilder.AIFactory.Builders.OptimizerBuilder.tf.train.GradientDescentOptimizer')
+    @mock.patch('AIBuilder.AIFactory.Builders.tf.contrib.estimator.clip_gradients_by_norm')
+    @mock.patch('AIBuilder.AIFactory.Builders.tf.train.GradientDescentOptimizer')
     def test_build_with_clipping(self, mock_optimizer, mock_clipper):
         arti = mock.Mock('OptimizerBuilder.AbstractAI')
         arti.set_optimizer = mock.Mock()
@@ -244,7 +240,7 @@ class TestOptimizerBuilder(unittest.TestCase):
         mock_optimizer.assert_called_with(learning_rate=1.0)
         mock_clipper.assert_called()
 
-    @mock.patch('AIBuilder.AIFactory.Builders.OptimizerBuilder.tf.train.GradientDescentOptimizer')
+    @mock.patch('AIBuilder.AIFactory.Builders.tf.train.GradientDescentOptimizer')
     def test_build_with_no_clipping(self, mock_optimizer):
         arti = mock.Mock('OptimizerBuilder.AbstractAI')
         arti.set_optimizer = mock.Mock()
