@@ -1,31 +1,6 @@
-from abc import ABC, abstractmethod
 import unittest
-from typing import List, Optional
-
-
-class Specification(ABC):
-
-    def __init__(self, name: str, value):
-        self.name = name
-        self.value = value
-
-    @abstractmethod
-    def validate(self):
-        pass
-
-    def __call__(self):
-        return self.value
-
-
-class TypeSpecification(Specification):
-
-    def __init__(self, name: str, value, valid_types: List[str]):
-        super().__init__(name, value)
-        self.valid_types = valid_types
-
-    def validate(self):
-        assert self.value in self.valid_types, 'Value {} must be in {}, {} given'\
-            .format(self.name, self.valid_types, self.value)
+from AIBuilder.AIFactory.Specifications import TypeSpecification, RangeSpecification, \
+    DataTypeSpecification, IsCallableSpecification, NullSpecification, Descriptor, FeatureColumnsSpecification
 
 
 class TestTypeSpecification(unittest.TestCase):
@@ -41,18 +16,6 @@ class TestTypeSpecification(unittest.TestCase):
             self.type_specification.validate()
 
 
-class RangeSpecification(Specification):
-
-    def __init__(self, name: str, value, min_value: int, max_value: int):
-        super().__init__(name, value)
-        self.min = min_value
-        self.max = max_value
-
-    def validate(self):
-        assert self.min <= self.value <= self.max, "{} must be in range {} - {}, {} given"\
-            .format(self.name, self.min, self.max, self.value)
-
-
 class TestRangeSpecification(unittest.TestCase):
 
     def test_valid(self):
@@ -65,17 +28,6 @@ class TestRangeSpecification(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             self.range_specification.validate()
-
-
-class DataTypeSpecification(Specification):
-
-    def __init__(self, name: str, value, data_type):
-        super().__init__(name, value)
-        self.data_type = data_type
-
-    def validate(self):
-        assert type(self.value) is self.data_type, 'Value \'{}\' must be of type {}, {} given'\
-            .format(self.name, self.data_type, type(self.value))
 
 
 class TestDataTypeSpecification(unittest.TestCase):
@@ -97,19 +49,13 @@ class TestDataTypeSpecification(unittest.TestCase):
             self.data_type_specification.validate()
 
 
-class IsCallableSpecification(Specification):
-    def validate(self):
-        assert callable(self.value), 'Value \'{}\' must be of callable, {} given'\
-            .format(self.name, self.value)
-
-
 class TestIsCallableSpecification(unittest.TestCase):
 
     def test_valid(self):
-        l = lambda x: 1+1
+        l = lambda x: 1 + 1
 
         def fnc():
-            return 1+1
+            return 1 + 1
 
         f = fnc
 
@@ -130,15 +76,6 @@ class TestIsCallableSpecification(unittest.TestCase):
             lnc_specification.validate()
 
 
-class NullSpecification(Specification):
-
-    def __init__(self, name: str):
-        super().__init__(name, None)
-
-    def validate(self):
-        assert self.value is None, 'Null Specification not None but, {}.'.format(self.value)
-
-
 class TestNullSpecification(unittest.TestCase):
 
     def setUp(self):
@@ -154,21 +91,6 @@ class TestNullSpecification(unittest.TestCase):
 
     def test_is_none(self):
         self.assertTrue(self.specification() is None)
-
-
-class Descriptor(Specification):
-
-    def __init__(self, name: str, value: Optional[List]):
-        if value is None:
-            value = []
-
-        super().__init__(name, value)
-
-    def validate(self):
-        pass
-
-    def add_description(self, value: str):
-        self.value.append(value)
 
 
 class TestDescriptor(unittest.TestCase):
@@ -190,6 +112,75 @@ class TestDescriptor(unittest.TestCase):
         self.descriptor.add_description('test_dir 1')
         self.assertEqual(self.descriptor.value, ['test_dir 1'])
         self.descriptor.validate()
+
+
+class TestFeatureColumnsSpecification(unittest.TestCase):
+
+    valid_types = ['type_one', 'type_two']
+
+    def test_valid(self):
+        feature_columns = [
+            {'name': 'column_name_1', 'type': 'type_one'},
+            {'name': 'column_name_2', 'type': 'type_two'}
+        ]
+
+        self.specification_setter(feature_columns=feature_columns)
+        self.feature_col_specification.validate()
+
+        self.feature_col_specification.add_feature_column('column_name_3', 'type_one')
+        self.feature_col_specification.validate()
+
+        values = self.feature_col_specification.value
+
+        self.assertEqual(values[0]['name'], 'column_name_1')
+        self.assertEqual(values[0]['type'], 'type_one')
+
+        self.assertEqual(values[1]['name'], 'column_name_2')
+        self.assertEqual(values[1]['type'], 'type_two')
+
+        self.assertEqual(values[2]['name'], 'column_name_3')
+        self.assertEqual(values[2]['type'], 'type_one')
+
+    def test_invalid(self):
+        feature_columns = [
+            {'name': 'column_name_1', 'type': 'type_one'},
+            {'name': 'column_name_2', 'type': 'invalid'}
+        ]
+        self.specification_setter(feature_columns=feature_columns)
+
+        with self.assertRaises(AssertionError):
+            self.feature_col_specification.validate()
+
+        feature_columns = [
+            {'name': 'column_name_1', 'type': 'type_one'},
+            {'name': 23, 'type': 'type_two'}
+        ]
+        self.specification_setter(feature_columns=feature_columns)
+
+        with self.assertRaises(AssertionError):
+            self.feature_col_specification.validate()
+
+        feature_columns = [
+            {'name': 'column_name', 'type': 'type_one'},
+            {'name': 'column_name', 'type': 'type_one'}
+        ]
+        self.specification_setter(feature_columns=feature_columns)
+
+        with self.assertRaises(AssertionError):
+            self.feature_col_specification.validate()
+
+    def test_no_feature_column_set(self):
+        feature_columns = []
+        self.specification_setter(feature_columns=feature_columns)
+
+        with self.assertRaises(AssertionError):
+            self.feature_col_specification.validate()
+
+    def specification_setter(self, feature_columns):
+        self.feature_col_specification = FeatureColumnsSpecification('name', feature_columns, self.valid_types)
+
+    def tearDown(self):
+        self.feature_col_specification = None
 
 
 if __name__ == '__main__':
