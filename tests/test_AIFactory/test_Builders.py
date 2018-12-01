@@ -54,7 +54,7 @@ class BuilderTest(TestCase):
 class TestDataBuilder(unittest.TestCase):
 
     def test_build(self):
-        data_builder = DataBuilder(data_source='../../../data/test_data.csv',
+        data_builder = DataBuilder(data_source='C:/python/practice2/AIBuilder/tests/data/test_data.csv',
                                    target_column='target_1',
                                    validation_data_percentage=20,
                                    feature_columns={},
@@ -74,7 +74,7 @@ class TestDataBuilder(unittest.TestCase):
         self.validate_data_frame(arti.evaluation_data, feature_names)
 
     def test_constructor_build(self):
-        data_builder = DataBuilder(data_source='../../../data/test_data.csv',
+        data_builder = DataBuilder(data_source='C:/python/practice2/AIBuilder/tests/data/test_data.csv',
                                    target_column='target_1',
                                    validation_data_percentage=20,
                                    feature_columns={
