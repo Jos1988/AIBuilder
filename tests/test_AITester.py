@@ -42,12 +42,6 @@ class AITesterTest(TestCase):
         self.ai_tester.log_testing_report.assert_called_once()
         self.ai_tester.summizer.summize.assert_called_once()
 
-    @mock.patch('AIBuilder.AITester.print')
-    def test_print_results(self, print: mock.Mock):
-        self.ai_tester.results = {'a': 'a'}
-        self.ai_tester.print_evaluation_results()
-        print.assert_called_once_with('a' + ': ' + str('a'))
-
     def test_log_testing_report(self):
         open = mock.mock_open()
         self.ai_tester.results = {'a': 'a'}
@@ -56,14 +50,16 @@ class AITesterTest(TestCase):
         file.write = mock.Mock()
         open.return_value = file
         with mock.patch('AIBuilder.AITester.open', open, create=True):
+            self.ai_tester.set_report_printer()
             self.ai_tester.log_testing_report()
+            # self.ai_tester.report_printer.print_results(self.ai_tester.results)
             open.assert_called_once_with('path/project/ai_reports.txt', mode='a')
-            print_name = mock.call('\n--- AI: ' + 'name' + ' ---')
-            print_time = mock.call('\n--- time: ' + 'testTime' + ' ---')
-            print_report = mock.call('\n' + 'a' + ': ' + str('a'))
-            print_newline = mock.call('\n')
-            print_builder = mock.call('\nbuilder_1')
-            print_spec = mock.call('\n - ingredient_1: 1')
+            print_name = mock.call('--- AI: ' + 'name' + ' ---')
+            print_time = mock.call('--- time: ' + 'testTime' + ' ---')
+            print_report = mock.call('' + 'a' + ': ' + str('a'))
+            print_newline = mock.call('')
+            print_builder = mock.call('builder_1')
+            print_spec = mock.call(' - ingredient_1: 1')
             file.write.assert_has_calls(
                 [print_name, print_time, print_report, print_newline, print_builder, print_spec],
                 any_order=True)

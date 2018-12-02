@@ -26,8 +26,8 @@ class AITester(AbstractAITester):
         self.results = {}
         console_strategy = ConsolePrintStrategy()
         self.console_printer = Printer(console_strategy)
-        self.report_printer = self.set_report_printer()
         self.description_hash = None
+        self.report_printer = None
 
     def run_AI_test(self, ai: AbstractAI):
         self.set_AI(ai)
@@ -48,10 +48,11 @@ class AITester(AbstractAITester):
         report = self.open_report_file('a')
         report_print_strategy = ReportPrintStrategy(report=report)
 
-        return Printer(report_print_strategy)
+        self.report_printer = Printer(report_print_strategy)
 
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
+        self.set_report_printer()
 
     def is_unique(self) -> bool:
         report = self.open_report_file('r')
@@ -185,8 +186,8 @@ class Printer:
                 continue
 
             for element, value in description.items():
-                self.line(' - ' + element + ' : ' + str(value))
+                self.line(' - ' + element + ': ' + str(value))
 
     def print_results(self, results: dict):
-        for label, value in results:
+        for label, value in results.items():
             self.line(label + ': ' + str(value))
