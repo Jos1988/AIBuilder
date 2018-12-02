@@ -75,6 +75,7 @@ class AITester(AbstractAITester):
         self.print_description()
         self.print_results()
         self.log_testing_report()
+        self.report_printer.output.close_report()
 
         self.summizer.log('finished evaluation', None)
         self.summizer.summize()
@@ -130,6 +131,7 @@ class PrintStrategy(ABC):
     def new_line(self):
         pass
 
+    @abstractmethod
     def print_new_line(self, text: str):
         self.new_line()
         self.print(text)
@@ -138,10 +140,13 @@ class PrintStrategy(ABC):
 class ConsolePrintStrategy(PrintStrategy):
 
     def print(self, text: str):
-        print(text)
+        print(text, end='')
 
     def new_line(self):
         print()
+
+    def print_new_line(self, text: str):
+        print(text)
 
 
 class ReportPrintStrategy(PrintStrategy):
@@ -154,6 +159,10 @@ class ReportPrintStrategy(PrintStrategy):
 
     def new_line(self):
         self.report.write('\n')
+
+    def print_new_line(self, text: str):
+        self.new_line()
+        self.print(text)
 
     def close_report(self):
         self.report.close()

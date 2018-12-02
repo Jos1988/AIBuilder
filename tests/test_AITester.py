@@ -31,6 +31,7 @@ class AITesterTest(TestCase):
         self.ai_tester.log_testing_report = mock.Mock()
         self.ai_tester.summizer.summize = mock.Mock()
         self.ai_tester.determine_test_time()
+        self.ai_tester.report_printer = mock.Mock()
         self.ai.evaluate = mock.Mock()
         self.ai.evaluate.return_value = {'result': 'test_dir'}
 
