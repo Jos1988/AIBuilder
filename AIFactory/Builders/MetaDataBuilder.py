@@ -1,1 +1,0 @@
-# todo: make metadatabuilder that determines metadata types autonomously.

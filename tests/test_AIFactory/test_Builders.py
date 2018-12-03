@@ -1,12 +1,14 @@
-from unittest import TestCase, mock
+from unittest import mock
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.Data import MetaData, DataModel
 from AIBuilder.AIFactory.Specifications import TypeSpecification
 import unittest
+import numpy
+import pandas as pd
 from AIBuilder.AIFactory.Builders import Builder
 import AIBuilder.DataScrubbing as scrubber
 from AIBuilder.AIFactory.Builders import DataBuilder, EstimatorBuilder, InputFunctionBuilder, NamingSchemeBuilder, \
-    OptimizerBuilder, ScrubAdapter
+    OptimizerBuilder, ScrubAdapter, MetadataBuilder
 
 
 class TestBuilder(Builder):
@@ -26,7 +28,7 @@ class TestBuilder(Builder):
         pass
 
 
-class BuilderTest(TestCase):
+class BuilderTest(unittest.TestCase):
 
     def setUp(self):
         self.builder = TestBuilder()
@@ -293,6 +295,43 @@ class TestScrubAdapter(unittest.TestCase):
         and_scrubber.scrub.assert_any_call(training_data),
         and_scrubber.validate_metadata.assert_any_call(evaluation_data.metadata),
         and_scrubber.scrub.assert_any_call(evaluation_data)
+
+
+class TestMetadataBuilder(unittest.TestCase):
+
+    def test_build(self):
+        builder = MetadataBuilder()
+        arti = mock.Mock('AIBuilder.AbstractAI')
+
+        # mock evaluation model
+        data = {'col1': ['cat1', 'cat2'], 'col2': [3, 4], 'col3': [0.1, 0.2], 'col4': [True, False]}
+        dataframe = pd.DataFrame(data=data)
+        evaluation_model = DataModel(dataframe)
+
+        arti.get_evaluation_data = mock.Mock()
+        arti.get_evaluation_data.return_value = evaluation_model
+
+        # mock training model
+        data = {'col1': ['cat1', 'cat2'], 'col2': [3, 4], 'col3': [0.1, 0.2], 'col4': [True, False]}
+        dataframe = pd.DataFrame(data=data)
+        training_model = DataModel(dataframe)
+
+        arti.get_training_data = mock.Mock()
+        arti.get_training_data.return_value = training_model
+
+        # build
+        builder.build(arti)
+
+        # assert
+        self.assertListEqual(training_model.metadata.categorical_columns, ['col1', 'col4'])
+        self.assertListEqual(training_model.metadata.numerical_columns, ['col2', 'col3'])
+        self.assertListEqual(evaluation_model.metadata.categorical_columns, ['col1', 'col4'])
+        self.assertListEqual(evaluation_model.metadata.numerical_columns, ['col2', 'col3'])
+
+
+
+
+
 
 
 if __name__ == '__main__':

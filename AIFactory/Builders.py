@@ -4,6 +4,7 @@ from AIBuilder.Data import MetaData, DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
 import os
+import numpy as np
 from typing import Optional
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, TypeSpecification, \
     NullSpecification, RangeSpecification, Descriptor, FeatureColumnsSpecification
@@ -16,6 +17,7 @@ class Builder(ABC):
     ESTIMATOR = 'estimator'
     OPTIMIZER = 'optimizer'
     DATA_MODEL = 'data_model'
+    META_DATA = 'meta_data'
     SCRUBBER = 'scrubber'
     INPUT_FUNCTION = 'input_function'
     NAMING_SCHEME = 'naming'
@@ -372,6 +374,7 @@ class OptimizerBuilder(Builder):
 
         raise RuntimeError('Optimizer not set.')
 
+
 class ScrubAdapter(Builder):
 
     def __init__(self, scrubbers: list = None):
@@ -406,3 +409,41 @@ class ScrubAdapter(Builder):
 
         self.and_scrubber.validate_metadata(validation_data.metadata)
         self.and_scrubber.scrub(validation_data)
+
+
+class MetadataBuilder(Builder):
+
+    @property
+    def dependent_on(self) -> list:
+        return [self.DATA_MODEL]
+
+    @property
+    def builder_type(self) -> str:
+        return self.META_DATA
+
+    def validate(self):
+        pass
+
+    def build(self, neural_net: AbstractAI):
+        training_data_model: Optional[DataModel] = neural_net.get_training_data()
+
+        if None is not training_data_model:
+            df = training_data_model.get_dataframe()
+            metadata = MetaData()
+            types = df.dtypes.to_dict()
+
+            for column, data_type in types.items():
+
+                if data_type == object:
+                    metadata.define_categorical_columns([column])
+                elif data_type in [np.dtype('float32'), np.dtype('float64')]:
+                    metadata.define_numerical_columns([column])
+                elif data_type in [np.dtype('int32'), np.dtype('int64')]:
+                    metadata.define_numerical_columns([column])
+                elif data_type == bool:
+                    metadata.define_categorical_columns([column])
+                else:
+                    metadata.define_uncategorized_columns([column])
+                    raise RuntimeWarning('Column {} with value {} cannot be categorized.'.format(column, data_type))
+
+                training_data_model.metadata = metadata
