@@ -135,7 +135,7 @@ class AI(AbstractAI):
         self.training_fn = input_fn
 
     def get_training_data(self):
-        return self.evaluation_data
+        return self.training_data
 
     def set_evaluation_data(self, evaluation_data: DataModel):
         self.evaluation_data = evaluation_data
