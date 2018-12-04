@@ -56,8 +56,7 @@ class TestDataBuilder(unittest.TestCase):
                                    target_column='target_1',
                                    validation_data_percentage=20,
                                    feature_columns={},
-                                   data_columns=[],
-                                   metadata=MetaData())
+                                   data_columns=[])
 
         data_builder.add_feature_column(name='feature_1', column_type=DataBuilder.CATEGORICAL_COLUMN_VOC_LIST)
         data_builder.add_feature_column(name='feature_2', column_type=DataBuilder.NUMERICAL_COLUMN)
@@ -80,8 +79,7 @@ class TestDataBuilder(unittest.TestCase):
                                        'feature_2': DataBuilder.NUMERICAL_COLUMN,
                                        'feature_3': DataBuilder.NUMERICAL_COLUMN
                                    },
-                                   data_columns=[],
-                                   metadata=MetaData())
+                                   data_columns=[])
 
         arti = AI(project_name='name', log_dir='path/to/dir')
         data_builder.validate()
@@ -300,24 +298,28 @@ class TestScrubAdapter(unittest.TestCase):
 class TestMetadataBuilder(unittest.TestCase):
 
     def test_build(self):
-        builder = MetadataBuilder()
+        builder = MetadataBuilder({'col5': 'unknown'})
         arti = mock.Mock('AIBuilder.AbstractAI')
 
         # mock evaluation model
-        data = {'col1': ['cat1', 'cat2'], 'col2': [3, 4], 'col3': [0.1, 0.2], 'col4': [True, False]}
+        data = {'col1': ['cat1', 'cat2'], 'col2': [3, 4], 'col3': [0.1, 0.2], 'col4': [True, False],
+                'col5': ['some', 'thing']}
         dataframe = pd.DataFrame(data=data)
         evaluation_model = DataModel(dataframe)
 
         arti.get_evaluation_data = mock.Mock()
         arti.get_evaluation_data.return_value = evaluation_model
+        arti.set_evaluation_data = mock.Mock()
 
         # mock training model
-        data = {'col1': ['cat1', 'cat2'], 'col2': [3, 4], 'col3': [0.1, 0.2], 'col4': [True, False]}
+        data = {'col1': ['cat1', 'cat2'], 'col2': [3, 4], 'col3': [0.1, 0.2], 'col4': [True, False],
+                'col5': ['some', 'thing']}
         dataframe = pd.DataFrame(data=data)
         training_model = DataModel(dataframe)
 
         arti.get_training_data = mock.Mock()
         arti.get_training_data.return_value = training_model
+        arti.set_training_data = mock.Mock()
 
         # build
         builder.build(arti)
@@ -325,13 +327,12 @@ class TestMetadataBuilder(unittest.TestCase):
         # assert
         self.assertListEqual(training_model.metadata.categorical_columns, ['col1', 'col4'])
         self.assertListEqual(training_model.metadata.numerical_columns, ['col2', 'col3'])
+        self.assertListEqual(training_model.metadata.uncategorized_columns, ['col5'])
         self.assertListEqual(evaluation_model.metadata.categorical_columns, ['col1', 'col4'])
         self.assertListEqual(evaluation_model.metadata.numerical_columns, ['col2', 'col3'])
-
-
-
-
-
+        self.assertListEqual(evaluation_model.metadata.uncategorized_columns, ['col5'])
+        arti.set_evaluation_data.assert_called_once()
+        arti.set_training_data.assert_called_once()
 
 
 if __name__ == '__main__':

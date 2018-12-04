@@ -67,11 +67,9 @@ class DataBuilder(Builder):
                  target_column: str,
                  validation_data_percentage: int,
                  feature_columns: dict,
-                 data_columns: list,
-                 metadata: MetaData):
+                 data_columns: list):
 
         self.data_columns = data_columns
-        self.metadata = metadata
         self.validation_data_percentage = RangeSpecification('validation_data_perc', validation_data_percentage, 0, 100)
         self.training_data_percentage = RangeSpecification(name='training_data_perc',
                                                            value=(100 - self.validation_data_percentage.value),
@@ -107,14 +105,13 @@ class DataBuilder(Builder):
     def build(self, ai: AbstractAI):
         data = self.load_data()
         data.set_target_column(self.target_column())
-        data.metadata = self.metadata
 
         feature_columns = self.render_tf_feature_columns(data=data)
         data.set_tf_feature_columns(feature_columns)
 
         split_data = self.split_validation_and_test_data(data=data)
-        ai.set_evaluation_data(split_data['validation_data'])
         ai.set_training_data(split_data['training_data'])
+        ai.set_evaluation_data(split_data['validation_data'])
 
     def load_data(self) -> DataModel:
         loader = DataLoader()
@@ -142,6 +139,8 @@ class DataBuilder(Builder):
 
         return names
 
+    # todo: possible separate builder, but than we might ha to change the scrubAdapter and metadataBuilder,
+    #  as they expect training and validation data.
     def split_validation_and_test_data(self, data: DataModel):
         splitter = DataSetSplitter(data_model=data)
         result = splitter.split_by_ratio([self.training_data_percentage(), self.validation_data_percentage()])
@@ -269,6 +268,7 @@ class InputFunctionBuilder(Builder):
         neural_net.set_training_fn(train_function)
         neural_net.set_evaluation_fn(evaluation_function)
 
+
 class NamingSchemeBuilder(Builder):
 
     def __init__(self):
@@ -387,7 +387,7 @@ class ScrubAdapter(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.DATA_MODEL]
+        return [self.DATA_MODEL, self.META_DATA]
 
     @property
     def builder_type(self) -> str:
@@ -413,6 +413,9 @@ class ScrubAdapter(Builder):
 
 class MetadataBuilder(Builder):
 
+    def __init__(self, overrules: dict = {}):
+        self.overrules = overrules
+
     @property
     def dependent_on(self) -> list:
         return [self.DATA_MODEL]
@@ -426,24 +429,47 @@ class MetadataBuilder(Builder):
 
     def build(self, neural_net: AbstractAI):
         training_data_model: Optional[DataModel] = neural_net.get_training_data()
+        evaluation_data_model: Optional[DataModel] = neural_net.get_evaluation_data()
 
         if None is not training_data_model:
-            df = training_data_model.get_dataframe()
-            metadata = MetaData()
-            types = df.dtypes.to_dict()
+            neural_net.set_training_data(self.build_meta_data(training_data_model))
 
-            for column, data_type in types.items():
+        if None is not evaluation_data_model:
+            neural_net.set_evaluation_data(self.build_meta_data(evaluation_data_model))
 
-                if data_type == object:
-                    metadata.define_categorical_columns([column])
-                elif data_type in [np.dtype('float32'), np.dtype('float64')]:
+    def build_meta_data(self, data_model):
+        df = data_model.get_dataframe()
+        types = df.dtypes.to_dict()
+        data_model.metadata = self.fill_metadata(data_model.metadata, types)
+
+        return data_model
+
+    def fill_metadata(self, metadata, types):
+        for column, data_type in types.items():
+
+            if column in self.overrules:
+                overrule = self.overrules[column]
+                if overrule == 'numerical':
                     metadata.define_numerical_columns([column])
-                elif data_type in [np.dtype('int32'), np.dtype('int64')]:
-                    metadata.define_numerical_columns([column])
-                elif data_type == bool:
+                elif overrule == 'categorical':
                     metadata.define_categorical_columns([column])
-                else:
+                elif overrule == 'unknown':
                     metadata.define_uncategorized_columns([column])
-                    raise RuntimeWarning('Column {} with value {} cannot be categorized.'.format(column, data_type))
+                else:
+                    raise RuntimeError('Metadata overwrite {}, not recognized for column {}.'.format(overrule, column))
 
-                training_data_model.metadata = metadata
+                continue
+
+            if data_type == object:
+                metadata.define_categorical_columns([column])
+            elif data_type in [np.dtype('float32'), np.dtype('float64')]:
+                metadata.define_numerical_columns([column])
+            elif data_type in [np.dtype('int32'), np.dtype('int64')]:
+                metadata.define_numerical_columns([column])
+            elif data_type == bool:
+                metadata.define_categorical_columns([column])
+            else:
+                metadata.define_uncategorized_columns([column])
+                raise RuntimeError('Column {} with value {} cannot be categorized.'.format(column, data_type))
+
+        return metadata
