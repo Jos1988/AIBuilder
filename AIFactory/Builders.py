@@ -21,6 +21,7 @@ class Builder(ABC):
     SCRUBBER = 'scrubber'
     INPUT_FUNCTION = 'input_function'
     NAMING_SCHEME = 'naming'
+    DATA_SPLITTER = 'data_splitter'
 
     @property
     @abstractmethod
@@ -109,9 +110,10 @@ class DataBuilder(Builder):
         feature_columns = self.render_tf_feature_columns(data=data)
         data.set_tf_feature_columns(feature_columns)
 
-        split_data = self.split_validation_and_test_data(data=data)
-        ai.set_training_data(split_data['training_data'])
-        ai.set_evaluation_data(split_data['validation_data'])
+        ai.set_training_data(data)
+        # split_data = self.split_validation_and_test_data(data=data)
+        # ai.set_training_data(split_data['training_data'])
+        # ai.set_evaluation_data(split_data['validation_data'])
 
     def load_data(self) -> DataModel:
         loader = DataLoader()
@@ -141,11 +143,11 @@ class DataBuilder(Builder):
 
     # todo: possible separate builder, but than we might ha to change the scrubAdapter and metadataBuilder,
     #  as they expect training and validation data.
-    def split_validation_and_test_data(self, data: DataModel):
-        splitter = DataSetSplitter(data_model=data)
-        result = splitter.split_by_ratio([self.training_data_percentage(), self.validation_data_percentage()])
-
-        return {'training_data': result[0], 'validation_data': result[1]}
+    # def split_validation_and_test_data(self, data: DataModel):
+    #     splitter = DataSetSplitter(data_model=data)
+    #     result = splitter.split_by_ratio([self.training_data_percentage(), self.validation_data_percentage()])
+    #
+    #     return {'training_data': result[0], 'validation_data': result[1]}
 
     # todo: possible separate builder
     def render_tf_feature_columns(self, data: DataModel) -> list:
@@ -183,6 +185,53 @@ class DataBuilder(Builder):
             feature_column_data['name'],
             vocabulary_list=filtered_categories
         )
+
+
+class DataSplitterBuilder(Builder):
+    TRAINING_DATA = 'training'
+    EVALUATION_DATA = 'evaluatation'
+
+    def __init__(self, evaluation_data_perc: int, data_source: str):
+        self.data_source = TypeSpecification(name='data_source',
+                                             value=data_source,
+                                             valid_types=[self.TRAINING_DATA, self.EVALUATION_DATA])
+        self.evaluation_data_perc = RangeSpecification(name='evaluation_data_perc',
+                                                       value=evaluation_data_perc,
+                                                       min_value=0,
+                                                       max_value=100)
+        self.training_data_percentage = RangeSpecification(name='training_data_perc',
+                                                           value=(100 - evaluation_data_perc),
+                                                           min_value=0,
+                                                           max_value=100)
+
+    @property
+    def dependent_on(self) -> list:
+        return [self.META_DATA, self.DATA_MODEL]
+
+    @property
+    def builder_type(self) -> str:
+        return self.DATA_SPLITTER
+
+    def validate(self):
+        self.validate_specifications()
+
+    def build(self, neural_net: AbstractAI):
+        data = self.select_data(neural_net)
+
+        splitter = DataSetSplitter(data_model=data)
+        split_data = splitter.split_by_ratio([self.training_data_percentage(), self.evaluation_data_perc()])
+
+        neural_net.set_training_data(split_data[0])
+        neural_net.set_evaluation_data(split_data[1])
+
+    def select_data(self, neural_net):
+        if self.data_source() == self.TRAINING_DATA:
+            data = neural_net.get_training_data()
+        elif self.data_source() == self.EVALUATION_DATA:
+            data = neural_net.get_training_data()
+        else:
+            raise RuntimeError('Unknown data_source ({}) found in data splitter builder.'.format(self.data_source()))
+        return data
 
 
 class EstimatorBuilder(Builder):
