@@ -1,14 +1,13 @@
 from unittest import mock
 from AIBuilder.AI import AI, AbstractAI
-from AIBuilder.Data import MetaData, DataModel
+from AIBuilder.Data import DataModel
 from AIBuilder.AIFactory.Specifications import TypeSpecification
 import unittest
-import numpy
 import pandas as pd
 from AIBuilder.AIFactory.Builders import Builder
 import AIBuilder.DataScrubbing as scrubber
 from AIBuilder.AIFactory.Builders import DataBuilder, EstimatorBuilder, InputFunctionBuilder, NamingSchemeBuilder, \
-    OptimizerBuilder, ScrubAdapter, MetadataBuilder
+    OptimizerBuilder, ScrubAdapter, MetadataBuilder, DataSplitterBuilder
 
 
 class TestBuilder(Builder):
@@ -333,6 +332,44 @@ class TestMetadataBuilder(unittest.TestCase):
         self.assertListEqual(evaluation_model.metadata.uncategorized_columns, ['col5'])
         arti.set_evaluation_data.assert_called_once()
         arti.set_training_data.assert_called_once()
+
+
+class TestDataSplitterBuilder(unittest.TestCase):
+
+    def test_build(self):
+        builder = DataSplitterBuilder(evaluation_data_perc=20, data_source=DataSplitterBuilder.TRAINING_DATA)
+        arti = mock.Mock('AIBuilder.AbstractAI')
+
+        # mock training model
+        data = {'col1': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                'col2': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]}
+        dataframe = pd.DataFrame(data=data)
+        training_model = DataModel(dataframe)
+
+        arti.get_training_data = mock.Mock()
+        arti.get_training_data.return_value = training_model
+        arti.set_training_data = mock.Mock()
+
+        # mock evaluation model
+        data = {'col1': [11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+                'col2': [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]}
+        dataframe = pd.DataFrame(data=data)
+        evaluation_model = DataModel(dataframe)
+
+        arti.get_evaluation_data = mock.Mock()
+        arti.get_evaluation_data.return_value = evaluation_model
+        arti.set_evaluation_data = mock.Mock()
+
+        builder.build(neural_net=arti)
+
+        arti.set_evaluation_data.assert_called_once()
+        arti.set_training_data.assert_called_once()
+
+        split_evaluation_data = arti.set_evaluation_data.call_args[0][0].get_dataframe()
+        split_training_data = arti.set_training_data.call_args[0][0].get_dataframe()
+
+        self.assertEqual(2, len(split_evaluation_data))
+        self.assertEqual(8, len(split_training_data))
 
 
 if __name__ == '__main__':
