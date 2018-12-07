@@ -20,6 +20,8 @@ class MetaData:
         self.numerical_columns = list()
 
     def __repr__(self):
+        self.sort_column_lists()
+
         return repr({
             'categorical': self.categorical_columns,
             'numerical': self.numerical_columns,
@@ -27,6 +29,7 @@ class MetaData:
         })
 
     def __str__(self):
+        self.sort_column_lists()
         stringy_self = '\nmetadata:'
 
         for categorical_column in self.categorical_columns:
@@ -39,6 +42,11 @@ class MetaData:
             stringy_self = stringy_self + '\n' + unknown_column + ': ' + MetaData.UNKNOWN_DATA_TYPE
 
         return stringy_self
+
+    def sort_column_lists(self):
+        self.categorical_columns.sort()
+        self.numerical_columns.sort()
+        self.uncategorized_columns.sort()
 
     def define_categorical_columns(self, column_names: list):
         for column_name in column_names:
