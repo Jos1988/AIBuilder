@@ -17,6 +17,7 @@ class Builder(ABC):
     ESTIMATOR = 'estimator'
     OPTIMIZER = 'optimizer'
     DATA_MODEL = 'data_model'
+    FEATURE_COLUMN = 'feature_column'
     META_DATA = 'meta_data'
     SCRUBBER = 'scrubber'
     INPUT_FUNCTION = 'input_function'
@@ -60,25 +61,16 @@ class Builder(ABC):
 
 
 class DataBuilder(Builder):
-    CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
-    NUMERICAL_COLUMN = 'numeric_column'
-    valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
 
     def __init__(self, data_source: str,
                  target_column: str,
-                 feature_columns: dict,
                  data_columns: list):
 
-        self.data_columns = data_columns
+        self.data_columns = DataTypeSpecification('columns', data_columns, list)
         self.data_source = DataTypeSpecification('data_source', data_source, str)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
-        self.feature_columns = FeatureColumnsSpecification('feature_columns', [], self.valid_column_types)
         self.test_data = None
         self.validation_data = None
-
-        # validate input.
-        for name, type in feature_columns.items():
-            self.add_feature_column(name=name, column_type=type)
 
     @property
     def dependent_on(self) -> list:
@@ -88,21 +80,12 @@ class DataBuilder(Builder):
     def builder_type(self) -> str:
         return self.DATA_MODEL
 
-    def add_feature_column(self, name: str, column_type: str):
-        self.feature_columns.add_feature_column(name=name, column_type=column_type)
-
     def validate(self):
         self.validate_specifications()
-        assert self.target_column not in self.get_feature_column_names(), \
-            'target column {}, also set as feature column!'.format(self.target_column())
 
     def build(self, ai: AbstractAI):
         data = self.load_data()
         data.set_target_column(self.target_column())
-
-        feature_columns = self.render_tf_feature_columns(data=data)
-        data.set_tf_feature_columns(feature_columns)
-
         ai.set_training_data(data)
 
     def load_data(self) -> DataModel:
@@ -110,10 +93,9 @@ class DataBuilder(Builder):
 
         self.load_file(loader)
 
-        columns = self.get_feature_column_names()
+        columns = self.data_columns()
         columns.append(self.target_column())
-        columns = columns + self.data_columns
-        loader.filter_columns(columns)
+        loader.filter_columns(set(columns))
 
         return loader.get_dataset()
 
@@ -123,50 +105,6 @@ class DataBuilder(Builder):
             return
 
         raise RuntimeError('Failed to load data from {}.'.format(self.data_source()))
-
-    def get_feature_column_names(self) -> list:
-        names = []
-        for feature_column in self.feature_columns():
-            names.append(feature_column['name'])
-
-        return names
-
-    # todo: possible separate builder
-    def render_tf_feature_columns(self, data: DataModel) -> list:
-        tf_feature_columns = []
-        for feature_column in self.feature_columns():
-            column = None
-            if feature_column['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
-                column = self.build_categorical_column_voc_list(feature_column, data)
-            elif feature_column['type'] is self.NUMERICAL_COLUMN:
-                column = self.build_numerical_column(feature_column['name'])
-
-            if column is None:
-                raise RuntimeError('feature column not set, ({})'.format(feature_column))
-
-            tf_feature_columns.append(column)
-
-        return tf_feature_columns
-
-    @staticmethod
-    def build_numerical_column(feature_column: dict) -> tf.feature_column.numeric_column:
-        return tf.feature_column.numeric_column(feature_column)
-
-    @staticmethod
-    def build_categorical_column_voc_list(
-            feature_column_data: dict,
-            data: DataModel
-    ) -> tf.feature_column.categorical_column_with_vocabulary_list:
-
-        categories = data.get_all_column_categories(feature_column_data['name'])
-
-        # todo: refactor so tf columns are manufactured in different builder after scrubbing.
-        filtered_categories = [cat for cat in categories if type(cat) is str]
-
-        return tf.feature_column.categorical_column_with_vocabulary_list(
-            feature_column_data['name'],
-            vocabulary_list=filtered_categories
-        )
 
 
 class DataSplitterBuilder(Builder):
@@ -188,7 +126,7 @@ class DataSplitterBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.META_DATA, self.DATA_MODEL, self.SCRUBBER]
+        return [self.META_DATA, self.DATA_MODEL, self.SCRUBBER, self.FEATURE_COLUMN]
 
     @property
     def builder_type(self) -> str:
@@ -506,3 +444,88 @@ class MetadataBuilder(Builder):
                 raise RuntimeError('Column {} with value {} cannot be categorized.'.format(column, data_type))
 
         return metadata
+
+
+class FeatureColumnBuilder(Builder):
+    CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
+    NUMERICAL_COLUMN = 'numeric_column'
+    valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
+
+    def __init__(self, feature_columns: dict):
+
+        self.feature_columns = FeatureColumnsSpecification('feature_columns', [], self.valid_column_types)
+
+        for name, type in feature_columns.items():
+            self.add_feature_column(name=name, column_type=type)
+
+    @property
+    def dependent_on(self) -> list:
+        return [self.DATA_MODEL, self.SCRUBBER]
+
+    @property
+    def builder_type(self) -> str:
+        return self.FEATURE_COLUMN
+
+    def add_feature_column(self, name: str, column_type: str):
+        self.feature_columns.add_feature_column(name=name, column_type=column_type)
+
+    def validate(self):
+        self.validate_specifications()
+
+    def build(self, ai: AbstractAI):
+        training_data: Optional[DataModel] = ai.get_training_data()
+        evaluation_data: Optional[DataModel] = ai.get_evaluation_data()
+
+        if training_data is not None:
+            self.build_feature_columns(training_data)
+            ai.set_training_data(training_data)
+
+        if evaluation_data is not None:
+            self.build_feature_columns(evaluation_data)
+            ai.set_evaluation_data(evaluation_data)
+
+    def build_feature_columns(self, training_data):
+        self.validate_target_not_in_features(training_data)
+        feature_columns = self.render_tf_feature_columns(data=training_data)
+        training_data.set_tf_feature_columns(feature_columns)
+
+    def validate_target_not_in_features(self, data: DataModel):
+        target_column = data.target_column_name
+        assert target_column not in self.feature_columns(), 'Feature column \'{}\' is already set as target column' \
+            .format(target_column)
+
+    def render_tf_feature_columns(self, data: DataModel) -> list:
+        tf_feature_columns = []
+        for feature_column in self.feature_columns():
+            column = None
+            if feature_column['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
+                column = self.build_categorical_column_voc_list(feature_column, data)
+            elif feature_column['type'] is self.NUMERICAL_COLUMN:
+                column = self.build_numerical_column(feature_column['name'])
+
+            if column is None:
+                raise RuntimeError('feature column not set, ({})'.format(feature_column))
+
+            tf_feature_columns.append(column)
+
+        return tf_feature_columns
+
+    @staticmethod
+    def build_numerical_column(feature_column: dict) -> tf.feature_column.numeric_column:
+        return tf.feature_column.numeric_column(feature_column)
+
+    @staticmethod
+    def build_categorical_column_voc_list(
+            feature_column_data: dict,
+            data: DataModel
+    ) -> tf.feature_column.categorical_column_with_vocabulary_list:
+
+        categories = data.get_all_column_categories(feature_column_data['name'])
+
+        assert None not in categories, 'None in not a valid category, please check your scrubbing! None found in {}'\
+            .format(feature_column_data['name'])
+
+        return tf.feature_column.categorical_column_with_vocabulary_list(
+            feature_column_data['name'],
+            vocabulary_list=categories
+        )

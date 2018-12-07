@@ -177,7 +177,7 @@ class DataLoader:
         dataframe = pd.read_csv(path)
         self._ml_data_model = DataModel(dataframe)
 
-    def filter_columns(self, columns: list):
+    def filter_columns(self, columns: set):
         dataframe = self._ml_data_model.get_dataframe()
         columns = [column for column in columns if column in dataframe.columns]
         dataframe = dataframe[columns]

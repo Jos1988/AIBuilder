@@ -3,11 +3,12 @@ from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.Data import DataModel
 from AIBuilder.AIFactory.Specifications import TypeSpecification
 import unittest
+import tensorflow as tf
 import pandas as pd
 from AIBuilder.AIFactory.Builders import Builder
 import AIBuilder.DataScrubbing as scrubber
 from AIBuilder.AIFactory.Builders import DataBuilder, EstimatorBuilder, InputFunctionBuilder, NamingSchemeBuilder, \
-    OptimizerBuilder, ScrubAdapter, MetadataBuilder, DataSplitterBuilder
+    OptimizerBuilder, ScrubAdapter, MetadataBuilder, DataSplitterBuilder, FeatureColumnBuilder
 
 
 class TestBuilder(Builder):
@@ -53,47 +54,30 @@ class TestDataBuilder(unittest.TestCase):
     def test_build(self):
         data_builder = DataBuilder(data_source='C:/python/practice2/AIBuilder/tests/data/test_data.csv',
                                    target_column='target_1',
-                                   validation_data_percentage=20,
-                                   feature_columns={},
-                                   data_columns=[])
-
-        data_builder.add_feature_column(name='feature_1', column_type=DataBuilder.CATEGORICAL_COLUMN_VOC_LIST)
-        data_builder.add_feature_column(name='feature_2', column_type=DataBuilder.NUMERICAL_COLUMN)
-        data_builder.add_feature_column(name='feature_3', column_type=DataBuilder.NUMERICAL_COLUMN)
+                                   data_columns=['feature_1', 'feature_2', 'feature_3'])
 
         arti = AI(project_name='name', log_dir='path/to/dir')
         data_builder.validate()
         data_builder.build(ai=arti)
 
-        feature_names = ['feature_1', 'feature_2', 'feature_3']
-        self.validate_data_frame(arti.training_data, feature_names)
-        self.validate_data_frame(arti.evaluation_data, feature_names)
+        column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
+        self.validate_data_frame(arti.training_data, column_names)
 
     def test_constructor_build(self):
         data_builder = DataBuilder(data_source='C:/python/practice2/AIBuilder/tests/data/test_data.csv',
                                    target_column='target_1',
-                                   validation_data_percentage=20,
-                                   feature_columns={
-                                       'feature_1': DataBuilder.CATEGORICAL_COLUMN_VOC_LIST,
-                                       'feature_2': DataBuilder.NUMERICAL_COLUMN,
-                                       'feature_3': DataBuilder.NUMERICAL_COLUMN
-                                   },
-                                   data_columns=[])
+                                   data_columns=['feature_1', 'feature_2', 'feature_3'])
 
         arti = AI(project_name='name', log_dir='path/to/dir')
         data_builder.validate()
         data_builder.build(ai=arti)
 
-        feature_names = ['feature_1', 'feature_2', 'feature_3']
-        self.validate_data_frame(arti.training_data, feature_names)
-        self.validate_data_frame(arti.evaluation_data, feature_names)
+        column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
+        self.validate_data_frame(arti.training_data, column_names)
 
-    def validate_data_frame(self, data_frame: DataModel, feature_name_list: list):
-        self.assertEqual(data_frame.feature_columns_names, feature_name_list)
+    def validate_data_frame(self, data_frame: DataModel, columns: list):
         self.assertEqual(data_frame.target_column_name, 'target_1')
-
-        for tf_feature_column in data_frame.get_tf_feature_columns():
-            self.assertTrue(tf_feature_column.name in feature_name_list)
+        self.assertCountEqual(data_frame.get_dataframe().columns.tolist(), columns, )
 
 
 class TestEstimatorBuilder(unittest.TestCase):
@@ -370,6 +354,51 @@ class TestDataSplitterBuilder(unittest.TestCase):
 
         self.assertEqual(2, len(split_evaluation_data))
         self.assertEqual(8, len(split_training_data))
+
+
+class TestFeatureColumnBuilder(unittest.TestCase):
+
+    def test_build(self):
+        builder = FeatureColumnBuilder(
+            feature_columns={
+                'col1': FeatureColumnBuilder.CATEGORICAL_COLUMN_VOC_LIST,
+                'col3': FeatureColumnBuilder.NUMERICAL_COLUMN
+            }
+        )
+
+        arti = mock.Mock('AIBuilder.AbstractAI')
+
+        # mock training model
+        data = {'col3': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                'col2': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                'col1': ['cat_one', 'cat_one', 'cat_one', 'cat_one', 'cat_one', 'cat_two', 'cat_one', 'cat_two',
+                         'cat_one', 'cat_two']}
+
+        dataframe = pd.DataFrame(data=data)
+        training_model = DataModel(dataframe)
+        training_model.get_target_column = mock.Mock()
+        training_model.get_target_column.return_value = 'col2'
+
+        arti.get_training_data = mock.Mock()
+        arti.get_training_data.return_value = training_model
+        arti.set_training_data = mock.Mock()
+
+        arti.get_evaluation_data = mock.Mock()
+        arti.get_evaluation_data.return_value = None
+
+        builder.build(arti)
+
+        feature_columns = training_model.get_tf_feature_columns()
+        col1_cat_column = feature_columns[0]
+        col3_num_column = feature_columns[1]
+
+        arti.set_training_data.assert_called_once()
+
+        self.assertCountEqual(col1_cat_column.vocabulary_list, {'cat_one', 'cat_two'})
+        self.assertEqual(col1_cat_column.name, 'col1')
+
+        self.assertEqual(col3_num_column.name, 'col3')
+        self.assertEqual(col3_num_column.dtype, tf.float32)
 
 
 if __name__ == '__main__':

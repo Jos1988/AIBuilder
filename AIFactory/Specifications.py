@@ -79,6 +79,7 @@ class Descriptor(Specification):
     def add_description(self, value: str):
         self.value.append(value)
 
+
 class FeatureColumnsSpecification(Specification):
 
     def __init__(self, name: str, value: List[dict], valid_types: List[str]):
