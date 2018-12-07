@@ -1,14 +1,6 @@
 from AIBuilder.AI import AI, AbstractAI
-from AIBuilder.AIFactory.Builders.Builder import Builder
-from AIBuilder.AIFactory.Builders.DataBuilder import DataBuilder
-from AIBuilder.AIFactory.Builders.EstimatorBuilder import EstimatorBuilder
-from AIBuilder.AIFactory.Builders.OptimizerBuilder import OptimizerBuilder
-from AIBuilder.AIFactory.Builders.ScrubAdapter import ScrubAdapter
-from AIBuilder.Data import MetaData
-import AIBuilder.DataScrubbing as scrubber
-import unittest
+from AIBuilder.AIFactory.Builders import Builder
 
-# todo: move unit tests to dedicated folder and files for collective running.
 
 # todo: set all builders in some kind of recipe and allow cloning and modding to variate the recipes.
 #  Or rather, set a default on the factory, possibly from another file and create a 'rotate builders' method.
@@ -27,10 +19,8 @@ class AIFactory:
         self.builders_sorted = []
 
     def create_AI(self, builders: list) -> AbstractAI:
+        self.validate_builders(builders)
         artificial_intelligence = AI(self.project_name, self.log_dir, self.ai_name)
-
-        for builder in builders:
-            builder.validate()
 
         self.sortBuilders(builders)
 
@@ -44,6 +34,11 @@ class AIFactory:
         artificial_intelligence.description = ai_description
 
         return artificial_intelligence
+
+    @staticmethod
+    def validate_builders(builders: list):
+        for builder in builders:
+            builder.validate()
 
     def sortBuilders(self, builders: list):
         for builder in builders:
@@ -100,44 +95,3 @@ class AIFactory:
                 return dependent_builder
 
             continue
-
-
-class TestAIFactory(unittest.TestCase):
-
-    def setUp(self):
-        self.factory = AIFactory()
-
-    def test_create_AI(self):
-        metadata = MetaData()
-        metadata.define_numerical_columns(['feature_2', 'feature_3', 'target_1'])
-        metadata.define_categorical_columns(['feature_1'])
-
-        data_builder = DataBuilder(data_source='../data/test_data.csv', target_column='target_1',
-                                   validation_data_percentage=20,
-                                   feature_columns={
-                                       'feature_1': DataBuilder.CATEGORICAL_COLUMN_VOC_LIST,
-                                       'feature_2': DataBuilder.NUMERICAL_COLUMN,
-                                       'feature_3': DataBuilder.NUMERICAL_COLUMN
-                                   },
-                                   metadata=metadata)
-
-        estimator_builder = EstimatorBuilder(estimator_type=EstimatorBuilder.LINEAR_REGRESSOR)
-        optimizer_builder = OptimizerBuilder(optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
-                                             learning_rate=0.00002,
-                                             gradient_clipping=5.0)
-
-        missing_data_scrubber = scrubber.MissingDataScrubber('missing data')
-        average_scrubber = scrubber.AverageColumnScrubber(('feature_2', 'feature_3'), 'feature_4')
-        scrub_adapter = ScrubAdapter()
-        scrub_adapter.add_scrubber(missing_data_scrubber)
-        scrub_adapter.add_scrubber(average_scrubber)
-
-        artie = self.factory.create_AI([data_builder, estimator_builder, optimizer_builder, scrub_adapter])
-        self.assertIsNotNone(artie.optimizer)
-        self.assertIsNotNone(artie.estimator)
-        self.assertIsNotNone(artie.training_data)
-        self.assertIsNotNone(artie.validation_data)
-
-
-if __name__ == '__main__':
-    unittest.main()

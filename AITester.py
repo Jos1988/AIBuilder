@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AbstractAI
-from AIBuilder.Summizer import Summizer, TimeSummizer
-from unittest import TestCase, mock
-import unittest
+from AIBuilder.Summizer import Summizer
 from datetime import datetime
 import hashlib
+from _io import TextIOWrapper
 
 
-# AbstractAITester
 class AbstractAITester(ABC):
 
     @abstractmethod
@@ -19,32 +17,47 @@ class AbstractAITester(ABC):
         pass
 
 
-# todo refactor write and print logic to writer and printer.
-
-
 class AITester(AbstractAITester):
     AI: AbstractAI
-    description_hash_label = '\n--- description hash: '
 
     def __init__(self, summizer: Summizer):
         self.summizer = summizer
         self.test_time = None
         self.results = {}
+        console_strategy = ConsolePrintStrategy()
+        self.console_printer = Printer(console_strategy)
+        self.description_hash = None
+        self.report_printer = None
+
+    def run_AI_test(self, ai: AbstractAI):
+        self.set_AI(ai)
+        self.description_hash = self.stable_hash_description(ai.description)
+
+        if self.is_unique():
+            self.train_AI()
+            self.evaluate_AI()
+        else:
+            self.console_printer.line('')
+            self.console_printer.separate()
+            self.console_printer.line('AI already evaluated')
+            self.print_description()
+
+            self.console_printer.separate()
+
+    def set_report_printer(self):
+        report = self.open_report_file('a')
+        report_print_strategy = ReportPrintStrategy(report=report)
+
+        self.report_printer = Printer(report_print_strategy)
 
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
+        self.set_report_printer()
 
     def is_unique(self) -> bool:
         report = self.open_report_file('r')
-        description_hash = AITester.stable_hash_description(self.AI.description)
-        # description_hash = hash(repr(self.AI.description))
-        # print(description_hash)
-        # description_hash = hash(repr(self.AI.description))
-        # print(description_hash)
         for line in report:
-            # print(line)
-            # print(line.find(str(description_hash)))
-            if -1 is not line.find(str(description_hash)):
+            if -1 is not line.find(str(self.description_hash)):
                 return False
 
         return True
@@ -57,66 +70,33 @@ class AITester(AbstractAITester):
 
     def evaluate_AI(self):
         self.summizer.log('start evaluation', None)
-
         self.results = self.AI.evaluate()
 
-        print()
         self.print_description()
-        print()
-        self.print_evaluation_results()
+        self.print_results()
         self.log_testing_report()
+        self.report_printer.output.close_report()
 
         self.summizer.log('finished evaluation', None)
         self.summizer.summize()
 
-    def print_evaluation_results(self):
+    def print_results(self):
+        self.console_printer.separate()
         self.validate_results_set()
-        for label, value in self.results.items():
-            print(label + ': ' + str(value))
+        self.console_printer.print_results(self.results)
 
     def print_description(self):
-        print('--- AI: ' + self.AI.get_name() + ' ---')
-        print('--- time: ' + self.test_time + ' ---')
-        for builder_name, description in self.AI.description.items():
-            print(builder_name)
-
-            if type(description) is not dict:
-                print(' - ' + description)
-                continue
-
-            for element, value in description.items():
-                print(' - ' + element + ' : ' + str(value))
+        self.console_printer.separate()
+        self.console_printer.print_ai_description(
+            ai=self.AI, time_stamp=self.test_time, ai_hash=self.description_hash)
 
     def log_testing_report(self):
-        self.validate_results_set()
-        self.validate_test_time()
-
-        report = self.open_report_file('a')
-        report.write('\n')
-        report.write('\n--- AI: ' + self.AI.get_name() + ' ---')
-        report.write('\n--- time: ' + self.test_time + ' ---')
-        self.write_description(report)
-        report.write('\n')
-        self.write_results(report)
-
-        report.close()
-
-    def write_results(self, report):
-        for label, value in self.results.items():
-            report.write('\n' + label + ': ' + str(value))
-
-    def write_description(self, report):
-        description_hash = AITester.stable_hash_description(self.AI.description)
-        report.write('\n--- description hash: ' + str(description_hash))
-        for builder_name, description in self.AI.description.items():
-            report.write('\n' + builder_name)
-
-            if type(description) is not dict:
-                report.write('\n - ' + description)
-                continue
-
-            for element, value in description.items():
-                report.write('\n - ' + element + ': ' + str(value))
+        self.report_printer.line('')
+        self.report_printer.print_ai_description(
+            ai=self.AI, time_stamp=self.test_time, ai_hash=self.description_hash)
+        self.report_printer.line('')
+        self.report_printer.print_results(self.results)
+        self.report_printer.separate()
 
     def validate_results_set(self):
         assert type(self.results) is dict, 'Test results not set in AI tester.'
@@ -141,119 +121,82 @@ class AITester(AbstractAITester):
         return hash_result.hexdigest()
 
 
-class AITesterTest(TestCase):
+class PrintStrategy(ABC):
 
-    def setUp(self):
-        self.ai = mock.Mock('AITester.AbstractAI')
-        self.ai.description = {'builder_1': {'ingredient_1': 1}}
-        self.ai.train = mock.Mock(name='train')
-        self.ai.get_name = mock.Mock(name='get_name')
-        self.ai.get_name.return_value = 'name'
-        self.ai.get_project_name = mock.Mock(name='get_project_name')
-        self.ai.get_project_name.return_value = 'project'
-        self.ai.get_log_dir = mock.Mock(name='get_log_dir')
-        self.ai.get_log_dir.return_value = 'path'
+    @abstractmethod
+    def print(self, text: str):
+        pass
 
-        summizer = mock.patch('AITester.Summizer')
-        summizer.log = mock.Mock(name='log')
+    @abstractmethod
+    def new_line(self):
+        pass
 
-        self.ai_tester = AITester(summizer=summizer)
-        self.ai_tester.AI = self.ai
-
-    def test_training(self):
-        self.ai_tester.train_AI()
-        self.ai.train.assert_called()
-        self.assertEqual(2, self.ai_tester.summizer.log.call_count)
-
-    def test_evaluation(self):
-        self.ai_tester.log_testing_report = mock.Mock()
-        self.ai_tester.summizer.summize = mock.Mock()
-        self.ai.evaluate = mock.Mock()
-        self.ai.evaluate.return_value = {'result': 'test_dir'}
-
-        self.ai_tester.evaluate_AI()
-
-        self.assertEqual(2, self.ai_tester.summizer.log.call_count)
-        self.ai_tester.create_model_dir_path = mock.Mock()
-        self.ai.evaluate.assert_called_once()
-        self.ai_tester.log_testing_report.assert_called_once()
-        self.ai_tester.summizer.summize.assert_called_once()
-
-    @mock.patch('AITester.print')
-    def test_print_results(self, print: mock.Mock):
-        self.ai_tester.results = {'a': 'a'}
-        self.ai_tester.print_evaluation_results()
-        print.assert_called_once_with('a' + ': ' + str('a'))
-
-    def test_log_testing_report(self):
-        open = mock.mock_open()
-        self.ai_tester.results = {'a': 'a'}
-        self.ai_tester.test_time = 'testTime'
-        file = mock.Mock()
-        file.write = mock.Mock()
-        open.return_value = file
-
-        with mock.patch('AITester.open', open, create=True):
-            self.ai_tester.log_testing_report()
-            open.assert_called_once_with('path/project/ai_reports.txt', mode='a')
-            print_name = mock.call('\n--- AI: ' + 'name' + ' ---')
-            print_time = mock.call('\n--- time: ' + 'testTime' + ' ---')
-            print_report = mock.call('\n' + 'a' + ': ' + str('a'))
-            print_newline = mock.call('\n')
-            print_builder = mock.call('\nbuilder_1')
-            print_spec = mock.call('\n - ingredient_1: 1')
-            file.write.assert_has_calls(
-                [print_name, print_time, print_report, print_newline, print_builder, print_spec],
-                any_order=True)
-
-    def test_is_unique(self):
-        open = mock.mock_open()
-        file = ['line1', 'description: 123', 'line3']
-        open.return_value = file
-
-        with mock.patch('AITester.open', open, create=True):
-            result = self.ai_tester.is_unique()
-            self.assertTrue(result)
-
-    def test_is_not_unique(self):
-        open = mock.mock_open()
-        file = ['line1', 'description: 4015285680072685342', 'line3']
-        open.return_value = file
-
-        with mock.patch('AITester.open', open, create=True):
-            result = self.ai_tester.is_unique()
-            self.assertTrue(result)
-
-    def test_stable_hash_description(self):
-        result_hash = '986514f2494f256f444d9652abf742fc'
-        description = {'a': 'a'}
-        hash = AITester.stable_hash_description(description)
-        self.assertEqual(result_hash, hash)
-
-        # report = self.open_report_file('r')
-        # description_hash = hash(repr(self.ai.description))
-        # print(report.read())
-        # for line in report:
-        #     if -1 is not line.find(str(description_hash)):
-        #         return False
-        #
-        # return True
+    @abstractmethod
+    def print_new_line(self, text: str):
+        self.new_line()
+        self.print(text)
 
 
+class ConsolePrintStrategy(PrintStrategy):
 
-# todo: identify ai to check if it has already been trained and evaluated.
+    def print(self, text: str):
+        print(text, end='')
 
-# class HardTestAITester(TestCase):
-#
-#     def test_log(self):
-#         time_summizer = TimeSummizer()
-#         tester = AITester('test_name', '../test_dir', summizer=time_summizer)
-#
-#         tester.determine_test_time()
-#         print(tester.test_time)
-#         tester.results = {'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd'}
-#         tester.log_testing_report()
+    def new_line(self):
+        print()
+
+    def print_new_line(self, text: str):
+        print(text)
 
 
-if __name__ == '__main__':
-    unittest.main()
+class ReportPrintStrategy(PrintStrategy):
+
+    def __init__(self, report: TextIOWrapper):
+        self.report = report
+
+    def print(self, text: str):
+        self.report.write(text)
+
+    def new_line(self):
+        self.report.write('\n')
+
+    def print_new_line(self, text: str):
+        self.new_line()
+        self.print(text)
+
+    def close_report(self):
+        self.report.close()
+
+
+class Printer:
+
+    def __init__(self, strategy: PrintStrategy):
+        self.output = strategy
+
+    def separate(self,):
+        self.line('==================================================================================================')
+
+    def line(self, text):
+        self.output.print_new_line(text)
+
+    def print_ai_description(self, ai: AbstractAI, time_stamp: str = None, ai_hash: str = None):
+        self.line('--- AI: ' + ai.get_name() + ' ---')
+        if time_stamp is not None:
+            self.line('--- time: ' + time_stamp + ' ---')
+
+        if ai_hash is not None:
+            self.line('--- description hash: ' + str(ai_hash))
+
+        for builder_name, description in ai.description.items():
+            self.line(builder_name)
+
+            if type(description) is not dict:
+                self.line(' - ' + description)
+                continue
+
+            for element, value in description.items():
+                self.line(' - ' + element + ': ' + str(value))
+
+    def print_results(self, results: dict):
+        for label, value in results.items():
+            self.line(label + ': ' + str(value))
