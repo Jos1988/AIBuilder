@@ -1,46 +1,27 @@
+from typing import List
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.AIFactory.Builders import Builder
 
 
 # todo: set all builders in some kind of recipe and allow cloning and modding to variate the recipes.
 #  Or rather, set a default on the factory, possibly from another file and create a 'rotate builders' method.
-#  Where the factory is given an numer of new builders and cycles through all possible combinations.
+#  Where the factory is given an number of new builders and cycles through all possible combinations.
 
-class AIFactory:
+class BuilderSorter(object):
+    builders_sorted = list
+    loaded_builders = list
+    builders_by_name = dict
+    unloaded_builders = list
 
-    def __init__(self, project_name: str, log_dir: str, ai_name: str = None):
-        self.project_name = project_name
-        self.log_dir = log_dir
-        self.ai_name = ai_name
-        self.builders_by_name = {}
+    def clear(self):
+        self.builders_sorted = []
         self.loaded_builders = []
+        self.builders_by_name = {}
         self.unloaded_builders = []
 
-        self.builders_sorted = []
+    def sort(self, builders: list) -> list:
+        self.clear()
 
-    def create_AI(self, builders: list) -> AbstractAI:
-        self.validate_builders(builders)
-        artificial_intelligence = AI(self.project_name, self.log_dir, self.ai_name)
-
-        self.sortBuilders(builders)
-
-        ai_description = {}
-        for builder in self.builders_sorted:
-            builder.build(artificial_intelligence)
-
-            builder_description = builder.describe()
-            ai_description[builder.builder_type] = builder_description
-
-        artificial_intelligence.description = ai_description
-
-        return artificial_intelligence
-
-    @staticmethod
-    def validate_builders(builders: list):
-        for builder in builders:
-            builder.validate()
-
-    def sortBuilders(self, builders: list):
         for builder in builders:
             self.unloaded_builders.append(builder)
             self.builders_by_name[builder.builder_type] = builder
@@ -56,6 +37,8 @@ class AIFactory:
             dependency = self.get_next_loadable_dependency(builder)
             self.unloaded_builders.remove(dependency)
             self.load_builder(dependency)
+
+        return self.builders_sorted
 
     def has_unloaded_dependencies(self, builder: Builder):
         dependencies = builder.dependent_on
@@ -83,7 +66,7 @@ class AIFactory:
                                .format(builder.__class__.__name__))
 
         for dependency in dependencies:
-            assert dependency in self.builders_by_name, '{} has unknown dependency: {}'\
+            assert dependency in self.builders_by_name, '{} has unknown dependency: {}' \
                 .format(builder.__class__.__name__, dependency)
 
             dependent_builder = self.builders_by_name[dependency]
@@ -95,3 +78,53 @@ class AIFactory:
                 return dependent_builder
 
             continue
+
+
+class PermutationGenerator(object):
+    def generate(self, builders: List[Builder]) -> list:
+        pass
+
+
+class AIFactory:
+
+    def __init__(self, project_name: str, log_dir: str, ai_name: str = None):
+        self.sorter = BuilderSorter()
+        self.project_name = project_name
+        self.log_dir = log_dir
+        self.ai_name = ai_name
+        self.builders_by_name = {}
+        self.loaded_builders = []
+        self.unloaded_builders = []
+        self.builders_sorted = []
+        self.permutation_generator = PermutationGenerator()
+
+    def cycle_permutation(self, builders: List[Builder]) -> List[AbstractAI]:
+        permutations = self.permutation_generator.generate(builders)
+        ai_list = []
+
+        for permutation in permutations:
+            ai_list = self.create_AI(permutation)
+
+        return ai_list
+
+    def create_AI(self, builders: list) -> AbstractAI:
+        self.validate_builders(builders)
+        artificial_intelligence = AI(self.project_name, self.log_dir, self.ai_name)
+
+        builders_sorted = self.sorter.sort(builders)
+
+        ai_description = {}
+        for builder in builders_sorted:
+            builder.build(artificial_intelligence)
+
+            builder_description = builder.describe()
+            ai_description[builder.builder_type] = builder_description
+
+        artificial_intelligence.description = ai_description
+
+        return artificial_intelligence
+
+    @staticmethod
+    def validate_builders(builders: list):
+        for builder in builders:
+            builder.validate()
