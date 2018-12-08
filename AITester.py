@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import List
+
 from AIBuilder.AI import AbstractAI
 from AIBuilder.Summizer import Summizer
 from datetime import datetime
@@ -28,6 +30,10 @@ class AITester(AbstractAITester):
         self.console_printer = Printer(console_strategy)
         self.description_hash = None
         self.report_printer = None
+
+    def cycle_AI_list(self, ai_list: List[AbstractAI]):
+        for ai in ai_list:
+            self.run_AI_test(ai)
 
     def run_AI_test(self, ai: AbstractAI):
         self.set_AI(ai)

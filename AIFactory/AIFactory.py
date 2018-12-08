@@ -1,11 +1,7 @@
-from typing import List
+from typing import List, Dict, Any
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.AIFactory.Builders import Builder
 
-
-# todo: set all builders in some kind of recipe and allow cloning and modding to variate the recipes.
-#  Or rather, set a default on the factory, possibly from another file and create a 'rotate builders' method.
-#  Where the factory is given an number of new builders and cycles through all possible combinations.
 
 class BuilderSorter(object):
     builders_sorted = list
@@ -81,8 +77,43 @@ class BuilderSorter(object):
 
 
 class PermutationGenerator(object):
+    permutations: List[List[Any]]
+    builder_types: List[str]
+    grouped_builders: Dict[str, List[Builder]]
+    all_builders: List[Builder]
+
     def generate(self, builders: List[Builder]) -> list:
-        pass
+        self.all_builders = builders
+        self.group_builders()
+        self.walk_layers()
+
+        return self.permutations
+
+    def group_builders(self):
+        self.grouped_builders = {}
+        self.builder_types = []
+        for builder in self.all_builders:
+            if builder.builder_type not in self.grouped_builders:
+                self.grouped_builders[builder.builder_type] = []
+                self.builder_types.append(builder.builder_type)
+
+            self.grouped_builders[builder.builder_type].append(builder)
+
+    def walk_layers(self):
+        layers = self.builder_types
+        self.permutations = [[]]
+        for layer in layers:
+            self.permutations = self.walk_layer_with_permutations(layer, permutations=self.permutations)
+
+    def walk_layer_with_permutations(self, layer_name: str, permutations: List[list]):
+        layer_options = self.grouped_builders[layer_name]
+
+        new_permutations = []
+        for permutation in permutations:
+            for option in layer_options:
+                new_permutations.append(permutation + [option])
+
+        return new_permutations
 
 
 class AIFactory:
@@ -92,18 +123,15 @@ class AIFactory:
         self.project_name = project_name
         self.log_dir = log_dir
         self.ai_name = ai_name
-        self.builders_by_name = {}
-        self.loaded_builders = []
-        self.unloaded_builders = []
-        self.builders_sorted = []
         self.permutation_generator = PermutationGenerator()
 
-    def cycle_permutation(self, builders: List[Builder]) -> List[AbstractAI]:
+    def cycle_permutations(self, builders: List[Builder]) -> List[AbstractAI]:
         permutations = self.permutation_generator.generate(builders)
         ai_list = []
 
         for permutation in permutations:
-            ai_list = self.create_AI(permutation)
+            ai = self.create_AI(permutation)
+            ai_list.append(ai)
 
         return ai_list
 
