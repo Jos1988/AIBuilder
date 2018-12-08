@@ -18,6 +18,8 @@ class AITesterTest(TestCase):
 
         summizer = mock.patch('AITester.Summizer')
         summizer.log = mock.Mock(name='log')
+        summizer.summize = mock.Mock(name='summize')
+        summizer.reset = mock.Mock(name='reset')
 
         self.ai_tester = AITester(summizer=summizer)
         self.ai_tester.AI = self.ai
@@ -30,6 +32,7 @@ class AITesterTest(TestCase):
     def test_evaluation(self):
         self.ai_tester.log_testing_report = mock.Mock()
         self.ai_tester.summizer.summize = mock.Mock()
+        self.ai_tester.summizer.reset = mock.Mock()
         self.ai_tester.determine_test_time()
         self.ai_tester.report_printer = mock.Mock()
         self.ai.evaluate = mock.Mock()

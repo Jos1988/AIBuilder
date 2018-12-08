@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.AIFactory.Builders import Builder
-from AIBuilder.AITester import ConsolePrintStrategy, FactoryPrinter
+from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 
 
 class BuilderSorter(object):

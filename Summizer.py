@@ -1,5 +1,6 @@
 import time
 from abc import ABC, abstractmethod
+from AIBuilder.AIFactory.Printing import PrintStrategy
 
 
 class Summizer(ABC):
@@ -9,7 +10,11 @@ class Summizer(ABC):
         pass
 
     @abstractmethod
-    def summize(self):
+    def summize(self, printer: PrintStrategy):
+        pass
+
+    @abstractmethod
+    def reset(self):
         pass
 
 
@@ -39,7 +44,7 @@ class TimeSummizer(Summizer):
 
         self.time_log[label] = value
 
-    def summize(self):
+    def summize(self, printer: PrintStrategy):
         """ print summary of logged times
 
         :return:
@@ -50,12 +55,15 @@ class TimeSummizer(Summizer):
 
         now = time.time()
         previous_time = self.start_time
-        print('\b')
+        printer.new_line()
         for label, time_stamp in self.time_log.items():
             elapsed = time_stamp - previous_time
-            print(label + ': ' + str(elapsed))
+            printer.print_new_line(label + ': ' + str(elapsed))
             previous_time = time_stamp
 
-        print('--------------------')
+        printer.print_new_line('--------------------')
         elapsed = now - self.start_time
-        print('total: ' + str(elapsed) + '\b')
+        printer.print_new_line('total: ' + str(elapsed) + '\b')
+
+    def reset(self):
+        self.start_time = None
