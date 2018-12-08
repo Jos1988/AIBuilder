@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.AIFactory.Builders import Builder
+from AIBuilder.AITester import ConsolePrintStrategy, FactoryPrinter
 
 
 class BuilderSorter(object):
@@ -118,26 +119,31 @@ class PermutationGenerator(object):
 
 class AIFactory:
 
-    def __init__(self, project_name: str, log_dir: str, ai_name: str = None):
+    builder_permutations: List[List[Builder]]
+
+    def __init__(self, builders: List[Builder],  project_name: str, log_dir: str):
+        console_strategy = ConsolePrintStrategy()
+        self.console_printer = FactoryPrinter(console_strategy)
         self.sorter = BuilderSorter()
         self.project_name = project_name
         self.log_dir = log_dir
-        self.ai_name = ai_name
         self.permutation_generator = PermutationGenerator()
+        self.builder_permutations = self.permutation_generator.generate(builders=builders)
 
-    def cycle_permutations(self, builders: List[Builder]) -> List[AbstractAI]:
-        permutations = self.permutation_generator.generate(builders)
-        ai_list = []
+    def count_remaining_ai(self):
+        return len(self.builder_permutations)
 
-        for permutation in permutations:
-            ai = self.create_AI(permutation)
-            ai_list.append(ai)
+    def has_next_ai(self):
+        return self.count_remaining_ai() is not 0
 
-        return ai_list
+    def create_next_ai(self):
+        next_builder_permutation = self.builder_permutations.pop()
 
-    def create_AI(self, builders: list) -> AbstractAI:
+        return self.create_AI(next_builder_permutation)
+
+    def create_AI(self, builders: list, ai_name: str = None) -> AbstractAI:
         self.validate_builders(builders)
-        artificial_intelligence = AI(self.project_name, self.log_dir, self.ai_name)
+        artificial_intelligence = AI(self.project_name, self.log_dir, ai_name)
 
         builders_sorted = self.sorter.sort(builders)
 
@@ -156,3 +162,7 @@ class AIFactory:
     def validate_builders(builders: list):
         for builder in builders:
             builder.validate()
+
+    def print_remaining_ai(self):
+        count = self.count_remaining_ai()
+        self.console_printer.print_remaining_ai(count)

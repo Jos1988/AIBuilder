@@ -8,7 +8,7 @@ from AIBuilder.AIFactory import AIFactory
 class TestAIFactory(TestCase):
 
     def setUp(self):
-        self.factory = AIFactory.AIFactory(project_name='test', log_dir='test/dir')
+        self.factory = AIFactory.AIFactory(builders=[], project_name='test', log_dir='test/dir')
 
         metadata = MetaData()
         metadata.define_numerical_columns(['feature_2', 'feature_3', 'target_1'])
@@ -43,15 +43,6 @@ class TestAIFactory(TestCase):
         self.builder_A.build.assert_called_once_with(self.artie)
         self.builder_B.build.assert_called_once_with(self.artie)
         self.builder_C.build.assert_called_once_with(self.artie)
-
-    def test_add_alternative_builder(self):
-        pass
-
-    def test_cycle_permutations(self):
-        pass
-
-    def test_generate_permutations(self):
-        pass
 
 
 class TestBuilderSorter(unittest.TestCase):

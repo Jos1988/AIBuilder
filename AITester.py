@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import List
-
 from AIBuilder.AI import AbstractAI
 from AIBuilder.Summizer import Summizer
 from datetime import datetime
@@ -27,13 +25,9 @@ class AITester(AbstractAITester):
         self.test_time = None
         self.results = {}
         console_strategy = ConsolePrintStrategy()
-        self.console_printer = Printer(console_strategy)
+        self.console_printer = TesterPrinter(console_strategy)
         self.description_hash = None
         self.report_printer = None
-
-    def cycle_AI_list(self, ai_list: List[AbstractAI]):
-        for ai in ai_list:
-            self.run_AI_test(ai)
 
     def run_AI_test(self, ai: AbstractAI):
         self.set_AI(ai)
@@ -54,7 +48,7 @@ class AITester(AbstractAITester):
         report = self.open_report_file('a')
         report_print_strategy = ReportPrintStrategy(report=report)
 
-        self.report_printer = Printer(report_print_strategy)
+        self.report_printer = TesterPrinter(report_print_strategy)
 
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
@@ -175,15 +169,17 @@ class ReportPrintStrategy(PrintStrategy):
 
 
 class Printer:
-
     def __init__(self, strategy: PrintStrategy):
         self.output = strategy
+
+    def line(self, text):
+        self.output.print_new_line(text)
 
     def separate(self,):
         self.line('==================================================================================================')
 
-    def line(self, text):
-        self.output.print_new_line(text)
+
+class TesterPrinter(Printer):
 
     def print_ai_description(self, ai: AbstractAI, time_stamp: str = None, ai_hash: str = None):
         self.line('--- AI: ' + ai.get_name() + ' ---')
@@ -206,3 +202,11 @@ class Printer:
     def print_results(self, results: dict):
         for label, value in results.items():
             self.line(label + ': ' + str(value))
+
+
+class FactoryPrinter(Printer):
+
+    def print_remaining_ai(self, remaining_ai: int):
+        self.separate()
+        self.line('--- {} AIs remaining. ---'.format(remaining_ai))
+        self.separate()
