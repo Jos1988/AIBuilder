@@ -24,6 +24,8 @@ class Builder(ABC):
     NAMING_SCHEME = 'naming'
     DATA_SPLITTER = 'data_splitter'
 
+    builder_registry = []
+
     @property
     @abstractmethod
     def dependent_on(self) -> list:
@@ -34,9 +36,16 @@ class Builder(ABC):
     def builder_type(self) -> str:
         pass
 
+    def __init__(self):
+        self.builder_registry.append(self)
+
     @abstractmethod
     def validate(self):
         pass
+
+    @classmethod
+    def get_all_registered(cls):
+        return cls.builder_registry
 
     def describe(self):
         description = {}
@@ -62,10 +71,8 @@ class Builder(ABC):
 
 class DataBuilder(Builder):
 
-    def __init__(self, data_source: str,
-                 target_column: str,
-                 data_columns: list):
-
+    def __init__(self, data_source: str, target_column: str, data_columns: list):
+        super().__init__()
         self.data_columns = DataTypeSpecification('columns', data_columns, list)
         self.data_source = DataTypeSpecification('data_source', data_source, str)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
@@ -112,6 +119,7 @@ class DataSplitterBuilder(Builder):
     EVALUATION_DATA = 'evaluation'
 
     def __init__(self, evaluation_data_perc: int, data_source: str):
+        super().__init__()
         self.data_source = TypeSpecification(name='data_source',
                                              value=data_source,
                                              valid_types=[self.TRAINING_DATA, self.EVALUATION_DATA])
@@ -161,11 +169,12 @@ class EstimatorBuilder(Builder):
     estimator_type = None
 
     def __init__(self, estimator_type: str):
+        super().__init__()
         self.set_estimator(estimator_type)
 
     @property
     def dependent_on(self) -> list:
-        return [self.OPTIMIZER, self.DATA_MODEL, self.NAMING_SCHEME]
+        return [self.OPTIMIZER, self.DATA_MODEL, self.NAMING_SCHEME, self.FEATURE_COLUMN, self.DATA_SPLITTER]
 
     @property
     def builder_type(self) -> str:
@@ -201,6 +210,7 @@ class InputFunctionBuilder(Builder):
     VALID_FN_NAMES = [BASE_FN]
 
     def __init__(self, train_fn: str, train_kwargs: dict, evaluation_fn: str, evaluation_kwargs: dict):
+        super().__init__()
         self.train_fn_name = TypeSpecification('test_dir function', train_fn, self.VALID_FN_NAMES)
         self.train_kwargs = DataTypeSpecification('train_kwargs', train_kwargs, dict)
 
@@ -241,6 +251,7 @@ class InputFunctionBuilder(Builder):
 class NamingSchemeBuilder(Builder):
 
     def __init__(self):
+        super().__init__()
         self.versions = []
         self.AI = None
         self.existing_names = []
@@ -309,6 +320,7 @@ class OptimizerBuilder(Builder):
     valid_optimizer_types = [GRADIENT_DESCENT_OPTIMIZER]
 
     def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[float] = None):
+        super().__init__()
         self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, self.valid_optimizer_types)
         self.learning_rate = DataTypeSpecification('learning_rate', learning_rate, float)
 
@@ -347,6 +359,7 @@ class OptimizerBuilder(Builder):
 class ScrubAdapter(Builder):
 
     def __init__(self, scrubbers: list = None):
+        super().__init__()
         self.and_scrubber = scrubber.AndScrubber()
         self.descriptor = Descriptor('scrubbers', None)
         if scrubbers is not None:
@@ -385,6 +398,7 @@ class ScrubAdapter(Builder):
 class MetadataBuilder(Builder):
 
     def __init__(self, overrules: dict = {}):
+        super().__init__()
         self.overrules = overrules
 
     @property
@@ -452,6 +466,7 @@ class FeatureColumnBuilder(Builder):
     valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
 
     def __init__(self, feature_columns: dict):
+        super().__init__()
 
         self.feature_columns = FeatureColumnsSpecification('feature_columns', [], self.valid_column_types)
 
