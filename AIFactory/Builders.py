@@ -134,7 +134,9 @@ class DataSplitterBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.META_DATA, self.DATA_MODEL, self.SCRUBBER, self.FEATURE_COLUMN]
+        return [
+            self.DATA_MODEL, #need data to plit
+        ]
 
     @property
     def builder_type(self) -> str:
@@ -174,7 +176,7 @@ class EstimatorBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.OPTIMIZER, self.DATA_MODEL, self.NAMING_SCHEME, self.FEATURE_COLUMN, self.DATA_SPLITTER]
+        return [self.OPTIMIZER, self.NAMING_SCHEME, self.FEATURE_COLUMN]
 
     @property
     def builder_type(self) -> str:
@@ -221,7 +223,7 @@ class InputFunctionBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.DATA_MODEL]
+        return [self.DATA_SPLITTER]
 
     @property
     def builder_type(self) -> str:
@@ -476,6 +478,7 @@ class FeatureColumnBuilder(Builder):
     @property
     def dependent_on(self) -> list:
         return [self.DATA_MODEL, self.SCRUBBER]
+    # requires scrubbed data in order to generate categories for categorical columns.
 
     @property
     def builder_type(self) -> str:
