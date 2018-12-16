@@ -1,9 +1,9 @@
 import unittest
-from AIBuilder.Data import DataModel
+from AIBuilder.Data import DataModel, MetaData
 import pandas as pd
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
-    ConvertCurrencyScrubber, AndScrubber
+    ConvertCurrencyScrubber, AndScrubber, OutlierScrubber
 
 
 class TestMissingDataScrubber(unittest.TestCase):
@@ -232,6 +232,83 @@ class TestAndScrubber(unittest.TestCase):
         self.assertEqual(0.0, result[0])
         self.assertEqual(2.0, result[1])
         self.assertEqual(105, round(result[2]))
+
+
+class TestOutlierScrubbing(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'num_1': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'num_2': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'cat_1': ['EUR', 'USD', 'EUR', 'EUR', 'USD', 'EUR', 'EUR', 'USD', 'EUR', 'USD'],
+        }
+
+        metadata = MetaData()
+        metadata.define_numerical_columns(['num_1', 'num_2'])
+        metadata.define_categorical_columns(['cat_1'])
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testOutlierScrubberCreate1(self):
+        OutlierScrubber(col_z={'num_1': 2, 'num_2': 3})
+
+    def testOutlierScrubberCreate2(self):
+        OutlierScrubber(all_z=2)
+
+    def testOutlierScrubberCreate3(self):
+        with self.assertRaises(AssertionError):
+            OutlierScrubber(col_z={'num_1': 2, 'num_2': 3}, all_z=2)
+
+    def testOutlierScrubberCreate4(self):
+        with self.assertRaises(AssertionError):
+            OutlierScrubber()
+
+    def testOutlierScrubberConfig(self):
+        scrubber = OutlierScrubber(col_z={'num_1': 2, 'num_2': 3})
+        config = scrubber.scrubber_config_list
+        self.assertEqual(config['num_1'], MetaData.NUMERICAL_DATA_TYPE)
+        self.assertEqual(config['num_2'], MetaData.NUMERICAL_DATA_TYPE)
+
+    def testOutlierValidateMetaData(self):
+        scrubber = OutlierScrubber(col_z={'num_1': 2, 'num_2': 3})
+        scrubber.validate_metadata(self.data_model.metadata)
+
+    def testOutlierValidateMetaDataFalse(self):
+        scrubber = OutlierScrubber(col_z={'num_1': 2, 'num_3': 3})
+
+        with self.assertRaises(RuntimeError):
+            scrubber.validate_metadata(self.data_model.metadata)
+
+    def testOutlierValidate(self):
+        scrubber = OutlierScrubber(col_z={'num_1': 2, 'num_2': 3})
+        scrubber.validate(self.data_model)
+
+    def testOutlierValidateFalse(self):
+        scrubber = OutlierScrubber(col_z={'num_1': 2, 'num_3': 3})
+
+        with self.assertRaises(AssertionError):
+            scrubber.validate(self.data_model)
+
+    def setOutlierScrubber1(self):
+        with self.assertRaises(AssertionError):
+            outlier_scrubber = OutlierScrubber(col_z={'num_1': 2, 'cat_1': 3})
+            outlier_scrubber.scrub(self.data_model)
+
+    def testOutlierScrubber2(self):
+        outlierScrubber = OutlierScrubber(col_z={'num_1': 2, 'num_2': 3})
+        outlierScrubber.scrub(self.data_model)
+        self.assertEqual(len(self.data_model.get_dataframe()), 9)
+
+    def testOutlierScrubber3a(self):
+        outlierScrubber = OutlierScrubber(all_z=2)
+        outlierScrubber.scrub(self.data_model)
+        self.assertEqual(len(self.data_model.get_dataframe()), 9)
+
+    def testOutlierScrubber3b(self):
+        outlierScrubber = OutlierScrubber(all_z=1)
+        outlierScrubber.scrub(self.data_model)
+        self.assertEqual(len(self.data_model.get_dataframe()), 5)
 
 
 if __name__ == '__main__':

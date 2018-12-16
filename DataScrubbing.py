@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
 from AIBuilder.Data import DataModel, MetaData
 from currency_converter import CurrencyConverter
 from datetime import datetime
+import numpy as np
+from scipy import stats
 
 
 class Scrubber(ABC):
@@ -214,3 +217,60 @@ class AndScrubber(Scrubber):
             scrubber.scrub(data_model)
 
         return data_model
+
+
+class OutlierScrubber(Scrubber):
+
+    @property
+    def scrubber_config_list(self):
+        required_columns = {}
+
+        if False is isinstance(self.col_z, NullSpecification):
+            for column, z in self.col_z().items():
+                required_columns[column] = MetaData.NUMERICAL_DATA_TYPE
+
+        return required_columns
+
+    def __init__(self, col_z: dict = None, all_z: int = None):
+        self.all_z = NullSpecification(name='all_z')
+        if all_z is not None:
+            self.all_z = DataTypeSpecification(name='all_z', value=all_z, data_type=int)
+
+        self.col_z = NullSpecification(name='column_z_values')
+        if col_z is not None:
+            self.col_z = DataTypeSpecification(name='column_z_values', value=col_z, data_type=dict)
+
+        assert col_z is None or all_z is None, 'coll_z and all_z cannot be used together in outlier scrubber.'
+        assert col_z is not None or all_z is not None, 'Either coll_z or all_z is required in outlier scrubber.'
+
+    def validate(self, data_model: DataModel):
+        if isinstance(self.col_z, NullSpecification):
+            return
+
+        num_columns = data_model.metadata.numerical_columns
+        for column, z in self.col_z().items():
+            assert column in num_columns, '{} column passed to outlier scrubber not found in data numerical columns' \
+                                          ' ({})'.format(column, data_model.metadata.__repr__())
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        if False is isinstance(self.col_z, NullSpecification):
+            column_z_values = self.col_z()
+            for column, z in column_z_values.items():
+                df = self.remove_outlier_from_df_column(column, df, z)
+
+        if False is isinstance(self.all_z, NullSpecification):
+            for column in data_model.metadata.numerical_columns:
+                df = self.remove_outlier_from_df_column(column, df, self.all_z())
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+    @staticmethod
+    def remove_outlier_from_df_column(column, df, z):
+        df = df[np.abs(stats.zscore(df[column])) < z]
+        return df
