@@ -36,7 +36,7 @@ class TestMetaData(unittest.TestCase):
         self.meta_data.define_numerical_columns(['numerical_1', 'numerical_2'])
         self.meta_data.define_categorical_columns(['categorical_3'])
         self.meta_data.define_numerical_columns(['numerical_3'])
-        self.meta_data.define_uncategorized_columns(['unknown_1'])
+        self.meta_data.define_unknown_columns(['unknown_1'])
 
         self.assertListEqual(['categorical_1', 'categorical_2', 'categorical_3'], self.meta_data.categorical_columns)
         self.assertListEqual(['numerical_1', 'numerical_2', 'numerical_3'], self.meta_data.numerical_columns)

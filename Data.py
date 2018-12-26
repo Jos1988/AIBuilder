@@ -1,12 +1,13 @@
 import pandas as pd
 import numpy as np
 from copy import deepcopy
-from typing import Sequence, Optional
+from typing import Sequence, Optional, List
 
 
 class MetaData:
     CATEGORICAL_DATA_TYPE = 'categorical'
     NUMERICAL_DATA_TYPE = 'numerical'
+    MULTIPLE_CAT_DATA_TYPE = 'multiple_cat'
     UNKNOWN_DATA_TYPE = 'unknown'
 
     def __init__(self, data: pd.DataFrame = None):
@@ -16,14 +17,21 @@ class MetaData:
         if data is not None:
             self.uncategorized_columns = list(data)
 
+        self.multiple_cat_columns = list()
         self.categorical_columns = list()
         self.numerical_columns = list()
+
+        self.column_collections = {self.MULTIPLE_CAT_DATA_TYPE: self.multiple_cat_columns,
+                                   self.CATEGORICAL_DATA_TYPE: self.categorical_columns,
+                                   self.NUMERICAL_DATA_TYPE: self.numerical_columns,
+                                   self.UNKNOWN_DATA_TYPE: self.uncategorized_columns}
 
     def __repr__(self):
         self.sort_column_lists()
 
         return repr({
             'categorical': self.categorical_columns,
+            'multiple_cat': self.multiple_cat_columns,
             'numerical': self.numerical_columns,
             'unknown': self.uncategorized_columns
         })
@@ -32,58 +40,47 @@ class MetaData:
         self.sort_column_lists()
         stringy_self = '\nmetadata:'
 
-        for categorical_column in self.categorical_columns:
-            stringy_self = stringy_self + '\n' + categorical_column + ': ' + MetaData.CATEGORICAL_DATA_TYPE
-
-        for numerical_column in self.numerical_columns:
-            stringy_self = stringy_self + '\n' + numerical_column + ': ' + MetaData.NUMERICAL_DATA_TYPE
-
-        for unknown_column in self.uncategorized_columns:
-            stringy_self = stringy_self + '\n' + unknown_column + ': ' + MetaData.UNKNOWN_DATA_TYPE
+        for column_type, collection in self.column_collections.items():
+            for column in collection:
+                stringy_self = stringy_self + '\n' + column + ': ' + column_type
 
         return stringy_self
 
     def sort_column_lists(self):
-        self.categorical_columns.sort()
-        self.numerical_columns.sort()
-        self.uncategorized_columns.sort()
+        for column_type, collection in self.column_collections.items():
+            collection.sort()
 
     def define_categorical_columns(self, column_names: list):
         for column_name in column_names:
-            self.add_column_to_type(self.categorical_columns, column_name)
+            self.add_column_to_type(self.CATEGORICAL_DATA_TYPE, column_name)
 
     def define_numerical_columns(self, column_names: list):
         for column_name in column_names:
-            self.add_column_to_type(self.numerical_columns, column_name)
+            self.add_column_to_type(self.NUMERICAL_DATA_TYPE, column_name)
 
-    def define_uncategorized_columns(self, column_names: list):
+    def define_unknown_columns(self, column_names: list):
         for column_name in column_names:
-            self.add_column_to_type(self.uncategorized_columns, column_name)
+            self.add_column_to_type(self.UNKNOWN_DATA_TYPE, column_name)
 
-    def add_column_to_type(self, type_list: list, column_name: str):
+    def define_multiple_cat_columns(self, column_names: list):
+        for column_name in column_names:
+            self.add_column_to_type(self.MULTIPLE_CAT_DATA_TYPE, column_name)
+
+    def add_column_to_type(self, column_type: str, column_name: str):
         self.remove_column(column_name)
-        if column_name not in type_list:
-            type_list.append(column_name)
+        collection = self.column_collections[column_type]
+        if column_name not in collection:
+            collection.append(column_name)
 
     def remove_column(self, column: str):
-        if column in self.numerical_columns:
-            self.numerical_columns.remove(column)
-
-        if column in self.categorical_columns:
-            self.categorical_columns.remove(column)
-
-        if column in self.uncategorized_columns:
-            self.uncategorized_columns.remove(column)
+        for column_type, collection in self.column_collections.items():
+            if column in collection:
+                collection.remove(column)
 
     def get_column_type(self, column: str) -> Optional[str]:
-        if column in self.categorical_columns:
-            return self.CATEGORICAL_DATA_TYPE
-
-        if column in self.numerical_columns:
-            return self.NUMERICAL_DATA_TYPE
-
-        if column in self.uncategorized_columns:
-            return self.UNKNOWN_DATA_TYPE
+        for column_type, collection in self.column_collections.items():
+            if column in collection:
+                return column_type
 
         return None
 
@@ -115,17 +112,12 @@ class DataModel:
         return self._dataframe[column].unique().tolist()
 
     def set_tf_feature_columns(self, feature_columns: list):
-        column_names = []
-        for column in feature_columns:
-            column_names.append(column.name)
-
         self._tf_feature_columns = feature_columns
-        self.feature_columns_names = column_names
 
     def get_tf_feature_columns(self):
         return self._tf_feature_columns
 
-    def set_feature_columns(self, feature_column_names: list):
+    def set_feature_columns(self, feature_column_names: List[str]):
         self.feature_columns_names = feature_column_names
 
     def get_feature_columns(self):
@@ -192,7 +184,6 @@ class DataLoader:
         self._ml_data_model = DataModel(dataframe)
 
     def get_dataset(self):
-
         return self._ml_data_model
 
     def set_dataset(self, dataset: DataModel):

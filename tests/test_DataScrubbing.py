@@ -3,7 +3,7 @@ from AIBuilder.Data import DataModel, MetaData
 import pandas as pd
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
-    ConvertCurrencyScrubber, AndScrubber, OutlierScrubber
+    ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleHotScrubber
 
 
 class TestMissingDataScrubber(unittest.TestCase):
@@ -309,6 +309,55 @@ class TestOutlierScrubbing(unittest.TestCase):
         outlierScrubber = OutlierScrubber(all_z=1)
         outlierScrubber.scrub(self.data_model)
         self.assertEqual(len(self.data_model.get_dataframe()), 5)
+
+
+class TestMakeCategoricalScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'num_1': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'cat_1': ['EUR', 'USD', 'EUR', 'EUR', 'USD', 'EUR', 'EUR', 'USD', 'EUR', 'USD'],
+        }
+
+        metadata = MetaData()
+        metadata.define_numerical_columns(['num_1'])
+        metadata.define_categorical_columns(['cat_1'])
+
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testScrubbing(self):
+        scrubber = MakeCategoricalScrubber()
+        scrubber.scrub(self.data_model)
+
+        self.assertEqual(self.df['cat_1'].dtype, 'category')
+        self.assertEqual(self.df['num_1'].dtype, 'int64')
+
+
+class TestMultipleHotColumnScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'num_1': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'mh_1': ['EUR,USD', 'USD,JPY,AUD', 'EUR', 'EUR,GBP,AUD', 'USD', 'EUR,JPY', 'EUR,GBP', 'USD,JPY', 'EUR,GBP',
+                     'USD'],
+        }
+
+        metadata = MetaData()
+        metadata.define_numerical_columns(['num_1'])
+        metadata.define_multiple_cat_columns(['mh_1'])
+
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testScrubbing(self):
+        scrubber = MultipleHotScrubber(sepperator=',')
+        scrubber.scrub(self.data_model)
+
+        first_item = self.data_model.get_dataframe()['mh_1'][0]
+        self.assertIsInstance(first_item, list)
 
 
 if __name__ == '__main__':

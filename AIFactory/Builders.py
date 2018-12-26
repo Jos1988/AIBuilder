@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+
+from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, NumericColumnStrategy, \
+    CategoricalColumnWithVOCListStrategy, IndicatorColumnWithVOCListStrategy
 from AIBuilder.AIFactory.Specifications import Specification
 from AIBuilder.Data import MetaData, DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
@@ -135,7 +138,7 @@ class DataSplitterBuilder(Builder):
     @property
     def dependent_on(self) -> list:
         return [
-            self.DATA_MODEL, #need data to plit
+            self.DATA_MODEL,  # need data to plit
         ]
 
     @property
@@ -208,8 +211,9 @@ class EstimatorBuilder(Builder):
 
 class InputFunctionBuilder(Builder):
     BASE_FN = 'base_fn'
+    NUMPY_FN = 'numpy_fn'
 
-    VALID_FN_NAMES = [BASE_FN]
+    VALID_FN_NAMES = [BASE_FN, NUMPY_FN]
 
     def __init__(self, train_fn: str, train_kwargs: dict, evaluation_fn: str, evaluation_kwargs: dict):
         super().__init__()
@@ -223,16 +227,32 @@ class InputFunctionBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.DATA_SPLITTER]
+        return [self.DATA_SPLITTER, self.SCRUBBER]
 
     @property
     def builder_type(self) -> str:
         return self.INPUT_FUNCTION
 
-    def assign_fn(self, fn_name: str, kwargs: dict):
+    def assign_fn(self, data_model: DataModel, fn_name: str, kwargs: dict):
+        if hasattr(self.fn_holder, fn_name):
+            return self.load_from_holder(data_model, fn_name, kwargs)
+
+        if fn_name == self.NUMPY_FN:
+            feature_columns = data_model.get_feature_columns()
+            target_column = data_model.get_target_column()
+
+            feature_columns = np.array(feature_columns.to_dict())
+            labels = np.array(target_column.to_dict())
+            kwargs['x'] = feature_columns
+            kwargs['y'] = labels
+
+            return lambda: tf.estimator.inputs.numpy_input_fn(**kwargs)
+
+    def load_from_holder(self, data_model: DataModel, fn_name: str, kwargs: dict):
         assert hasattr(self.fn_holder, fn_name), 'Function {} not known in function holder.'.format(fn_name)
         assert callable(getattr(self.fn_holder, fn_name)), 'Function {} is not callable.'.format(fn_name)
         fn = getattr(self.fn_holder, fn_name)
+        kwargs['data_model'] = data_model
 
         return lambda: fn(**kwargs)
 
@@ -240,11 +260,12 @@ class InputFunctionBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        self.train_kwargs.value['data_model'] = neural_net.training_data
-        self.evaluation_kwargs.value['data_model'] = neural_net.evaluation_data
+        # self.train_kwargs.value['data_model'] = neural_net.training_data
+        # self.evaluation_kwargs.value['data_model'] = neural_net.evaluation_data
 
-        train_function = self.assign_fn(self.train_fn_name(), self.train_kwargs())
-        evaluation_function = self.assign_fn(self.evaluation_fn_name(), self.evaluation_kwargs())
+        train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs())
+        evaluation_function = self.assign_fn(neural_net.evaluation_data, self.evaluation_fn_name(),
+                                             self.evaluation_kwargs())
 
         neural_net.set_training_fn(train_function)
         neural_net.set_evaluation_fn(evaluation_function)
@@ -436,15 +457,10 @@ class MetadataBuilder(Builder):
 
             if column in self.overrules:
                 overrule = self.overrules[column]
-                if overrule == 'numerical':
-                    metadata.define_numerical_columns([column])
-                elif overrule == 'categorical':
-                    metadata.define_categorical_columns([column])
-                elif overrule == 'unknown':
-                    metadata.define_uncategorized_columns([column])
-                else:
+                if overrule not in metadata.column_collections:
                     raise RuntimeError('Metadata overwrite {}, not recognized for column {}.'.format(overrule, column))
 
+                metadata.add_column_to_type(column_type=overrule, column_name=column)
                 continue
 
             if data_type == object:
@@ -456,16 +472,18 @@ class MetadataBuilder(Builder):
             elif data_type == bool:
                 metadata.define_categorical_columns([column])
             else:
-                metadata.define_uncategorized_columns([column])
+                metadata.define_unknown_columns([column])
                 raise RuntimeError('Column {} with value {} cannot be categorized.'.format(column, data_type))
 
         return metadata
 
 
 class FeatureColumnBuilder(Builder):
-    CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
-    NUMERICAL_COLUMN = 'numeric_column'
-    valid_column_types = [CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN]
+    SPLIT_TO_BINARY = 'split_to_binary' # todo: write
+    valid_column_types = [CategoricalColumnWithVOCListStrategy.CATEGORICAL_COLUMN_VOC_LIST,
+                          NumericColumnStrategy.NUMERICAL_COLUMN,
+                          IndicatorColumnWithVOCListStrategy.INDICATOR_COLUMN_VOC_LIST,
+                          SPLIT_TO_BINARY]
 
     def __init__(self, feature_columns: dict):
         super().__init__()
@@ -478,6 +496,7 @@ class FeatureColumnBuilder(Builder):
     @property
     def dependent_on(self) -> list:
         return [self.DATA_MODEL, self.SCRUBBER]
+
     # requires scrubbed data in order to generate categories for categorical columns.
 
     @property
@@ -502,48 +521,41 @@ class FeatureColumnBuilder(Builder):
             self.build_feature_columns(evaluation_data)
             ai.set_evaluation_data(evaluation_data)
 
-    def build_feature_columns(self, training_data):
-        self.validate_target_not_in_features(training_data)
-        feature_columns = self.render_tf_feature_columns(data=training_data)
-        training_data.set_tf_feature_columns(feature_columns)
+    def build_feature_columns(self, data):
+        self.validate_target_not_in_features(data)
+
+        feature_columns = self.render_tf_feature_columns(data_model=data)
+        data.set_tf_feature_columns(feature_columns)
+
+        names = [column['name'] for column in self.feature_columns()]
+        data.set_feature_columns(names)
 
     def validate_target_not_in_features(self, data: DataModel):
         target_column = data.target_column_name
         assert target_column not in self.feature_columns(), 'Feature column \'{}\' is already set as target column' \
             .format(target_column)
 
-    def render_tf_feature_columns(self, data: DataModel) -> list:
+    def render_tf_feature_columns(self, data_model: DataModel) -> list:
         tf_feature_columns = []
-        for feature_column in self.feature_columns():
-            column = None
-            if feature_column['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
-                column = self.build_categorical_column_voc_list(feature_column, data)
-            elif feature_column['type'] is self.NUMERICAL_COLUMN:
-                column = self.build_numerical_column(feature_column['name'])
+        for feature_column_info in self.feature_columns():
+            column_strategy = FeatureColumnStrategyFactory.get_strategy(feature_column_info['name'],
+                                                                        feature_column_info['type'],
+                                                                        data_model)
 
-            if column is None:
-                raise RuntimeError('feature column not set, ({})'.format(feature_column))
+            # if feature_column_info['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
+            #     column_strategy = CategoricalColumnWithVOCListStrategy(data_model=data_model,
+            #                                                            column_name=feature_column_info['name'])
+            #
+            # elif feature_column_info['type'] is self.NUMERICAL_COLUMN:
+            #     column_strategy = NumericColumnStrategy(data_model=data_model, column_name=feature_column_info['name'])
+            #
+            # elif feature_column_info['type'] is self.INDICATOR_COLUMN_VOC_LIST:
+            #     column_strategy = IndicatorColumnWithVOCListStrategy(data_model=data_model,
+            #                                                          column_name=feature_column_info['name'])
+            #
+            # elif feature_column_info['type'] is self.SPLIT_TO_BINARY:
+            #     column = self.build_binary_cat_columns(feature_column_info, data)
 
-            tf_feature_columns.append(column)
+            tf_feature_columns.append(column_strategy.build())
 
         return tf_feature_columns
-
-    @staticmethod
-    def build_numerical_column(feature_column: dict) -> tf.feature_column.numeric_column:
-        return tf.feature_column.numeric_column(feature_column)
-
-    @staticmethod
-    def build_categorical_column_voc_list(
-            feature_column_data: dict,
-            data: DataModel
-    ) -> tf.feature_column.categorical_column_with_vocabulary_list:
-
-        categories = data.get_all_column_categories(feature_column_data['name'])
-
-        assert None not in categories, 'None in not a valid category, please check your scrubbing! None found in {}'\
-            .format(feature_column_data['name'])
-
-        return tf.feature_column.categorical_column_with_vocabulary_list(
-            feature_column_data['name'],
-            vocabulary_list=categories
-        )

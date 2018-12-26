@@ -274,3 +274,49 @@ class OutlierScrubber(Scrubber):
     def remove_outlier_from_df_column(column, df, z):
         df = df[np.abs(stats.zscore(df[column])) < z]
         return df
+
+
+class MakeCategoricalScrubber(Scrubber):
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        metaData = data_model.metadata
+        for column in metaData.categorical_columns:
+            df[column] = df[column].astype('category')
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class MultipleHotScrubber(Scrubber):
+
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def __init__(self, sepperator: str):
+        self.sepperator = sepperator
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        metaData = data_model.metadata
+        for column in metaData.multiple_cat_columns:
+            df[column] = df[column].str.split(self.sepperator)
+
+        return data_model.set_dataframe(df)

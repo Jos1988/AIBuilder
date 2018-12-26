@@ -1,5 +1,6 @@
 from unittest import mock
 from AIBuilder.AI import AI, AbstractAI
+from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategy
 from AIBuilder.Data import DataModel
 from AIBuilder.AIFactory.Specifications import TypeSpecification
 import unittest
@@ -361,8 +362,9 @@ class TestFeatureColumnBuilder(unittest.TestCase):
     def test_build(self):
         builder = FeatureColumnBuilder(
             feature_columns={
-                'col1': FeatureColumnBuilder.CATEGORICAL_COLUMN_VOC_LIST,
-                'col3': FeatureColumnBuilder.NUMERICAL_COLUMN
+                'col1': FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
+                'col3': FeatureColumnStrategy.NUMERICAL_COLUMN,
+                'col4': FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST
             }
         )
 
@@ -372,7 +374,19 @@ class TestFeatureColumnBuilder(unittest.TestCase):
         data = {'col3': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                 'col2': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                 'col1': ['cat_one', 'cat_one', 'cat_one', 'cat_one', 'cat_one', 'cat_two', 'cat_one', 'cat_two',
-                         'cat_one', 'cat_two']}
+                         'cat_one', 'cat_two'],
+                'col4': [
+                    ['cat_four', 'cat_three', 'cat_four'],
+                    ['cat_two', 'cat_three', 'cat_four'],
+                    ['cat_two', 'cat_three', 'cat_four'],
+                    ['cat_two', 'cat_four'],
+                    ['cat_one', 'cat_three', 'cat_four'],
+                    ['cat_one', 'cat_three', 'cat_four'],
+                    ['cat_one', 'cat_three'],
+                    ['cat_one', 'cat_three', 'cat_four'],
+                    ['cat_one', 'cat_two', 'cat_three'],
+                    ['cat_two', 'cat_three'],
+                ]}
 
         dataframe = pd.DataFrame(data=data)
         training_model = DataModel(dataframe)
@@ -391,6 +405,7 @@ class TestFeatureColumnBuilder(unittest.TestCase):
         feature_columns = training_model.get_tf_feature_columns()
         col1_cat_column = feature_columns[0]
         col3_num_column = feature_columns[1]
+        col4_indicator_column = feature_columns[2]
 
         arti.set_training_data.assert_called_once()
 
@@ -399,6 +414,8 @@ class TestFeatureColumnBuilder(unittest.TestCase):
 
         self.assertEqual(col3_num_column.name, 'col3')
         self.assertEqual(col3_num_column.dtype, tf.float32)
+
+        self.assertEqual(col4_indicator_column.name, 'col4_indicator')
 
 
 if __name__ == '__main__':
