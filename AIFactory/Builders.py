@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.Specifications import Specification
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
@@ -191,17 +192,15 @@ class EstimatorBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        if self.estimator_type() is self.LINEAR_REGRESSOR:
-            estimator = tf.estimator.LinearRegressor(
-                feature_columns=neural_net.training_data.get_tf_feature_columns(),
-                optimizer=neural_net.optimizer,
-                model_dir=self.render_model_dir(neural_net)
-            )
+        strategy: EstimatorStrategy = EstimatorStrategyFactory.get_strategy(neural_net, self.estimator_type())
 
-            neural_net.set_estimator(estimator)
-            return
+        assert strategy is not None, 'Strategy for building Estimator of type {} not found.'\
+            .format(self.estimator_type())
 
-        raise RuntimeError('Estimator Builder failed to set estimator.')
+        estimator = strategy.build()
+        neural_net.set_estimator(estimator)
+
+        return
 
     @staticmethod
     def render_model_dir(ai) -> str:
