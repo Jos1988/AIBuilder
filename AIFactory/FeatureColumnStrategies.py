@@ -8,6 +8,7 @@ class FeatureColumnStrategy(ABC):
     INDICATOR_COLUMN_VOC_LIST = 'indicator_column'
     NUMERICAL_COLUMN = 'numeric_column'
     CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
+    MULTIPLE_HOT_COLUMNS = 'multiple_hot_columns'
 
     def __init__(self, column_name: str, data_model: DataModel):
         self.data_model = data_model
@@ -15,7 +16,7 @@ class FeatureColumnStrategy(ABC):
         self.result = None
 
     def build(self) -> tf.feature_column:
-        self.build_column()
+        self.result = self.build_column()
         self.validate_result()
 
         return self.result
@@ -37,7 +38,7 @@ class FeatureColumnStrategy(ABC):
 class NumericColumnStrategy(FeatureColumnStrategy):
 
     def build_column(self) -> tf.feature_column:
-        self.result = tf.feature_column.numeric_column(self.column_name)
+        return tf.feature_column.numeric_column(self.column_name)
 
     def validate_result(self):
         assert self.result.__class__.__name__ == '_NumericColumn'
@@ -53,7 +54,7 @@ class CategoricalColumnWithVOCListStrategy(FeatureColumnStrategy):
         category_grabber = SimpleCategoryGrabber(data_model=self.data_model, column_name=self.column_name)
         categories = category_grabber.grab()
 
-        self.result = tf.feature_column.categorical_column_with_vocabulary_list(
+        return tf.feature_column.categorical_column_with_vocabulary_list(
             self.column_name,
             vocabulary_list=categories
         )
@@ -77,7 +78,7 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
             vocabulary_list=categories
         )
 
-        self.result = tf.feature_column.indicator_column(categorical_column)
+        return tf.feature_column.indicator_column(categorical_column)
 
     def validate_result(self):
         assert self.result.__class__.__name__ == '_IndicatorColumn'
@@ -87,11 +88,37 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
         return [FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST]
 
 
+class MultipleHotFeatureStrategy(FeatureColumnStrategy):
+
+    def build_column(self) -> tf.feature_column:
+        df = self.data_model.get_dataframe()
+        binary_feature_cols = []
+
+        for column in df:
+            if self.column_name in column:
+                new_binary_feature_col = tf.feature_column.categorical_column_with_identity(
+                    key=column,
+                    num_buckets=2)
+                binary_feature_cols.append(new_binary_feature_col)
+
+        return binary_feature_cols
+
+    def validate_result(self):
+        assert type(self.result) is list
+        for result in self.result:
+            assert result.__class__.__name__ == '_IdentityCategoricalColumn'
+
+    @staticmethod
+    def column_types() -> list:
+        return [FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS]
+
+
 class FeatureColumnStrategyFactory:
     strategies = [
         NumericColumnStrategy,
         CategoricalColumnWithVOCListStrategy,
         IndicatorColumnWithVOCListStrategy,
+        MultipleHotFeatureStrategy
     ]  # type: List[FeatureColumnStrategy]
 
     @staticmethod
@@ -105,11 +132,16 @@ class FeatureColumnStrategyFactory:
 
 
 class CategoryGrabber(ABC):
-    def __init__(self, data_model: DataModel, column_name: str):
+
+    def __init__(self, data_model: DataModel, column_name: str, exclusion_list: List[str] = None):
         self.data_model = data_model
         self.column_name = column_name
         self.validate_column()
         self.column = self.get_series()
+        if exclusion_list is None:
+            exclusion_list = []
+
+        self.exclusion_list = exclusion_list
 
     def validate_column(self):
         df = self.data_model.get_dataframe()
@@ -127,7 +159,11 @@ class CategoryGrabber(ABC):
 class SimpleCategoryGrabber(CategoryGrabber):
 
     def grab(self) -> list:
-        return self.column.unique().tolist()
+        categories: List = self.column.unique().tolist()
+        for excluded_category in self.exclusion_list:
+            categories.remove(excluded_category)
+
+        return categories
 
 
 class FromListCategoryGrabber(CategoryGrabber):
@@ -136,7 +172,7 @@ class FromListCategoryGrabber(CategoryGrabber):
         categories = []
         for assigned_categories in self.column:
             for category in assigned_categories:
-                if category not in categories:
+                if category not in categories and category not in self.exclusion_list:
                     categories.append(category)
 
         return categories

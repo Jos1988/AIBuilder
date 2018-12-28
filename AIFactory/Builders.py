@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 
-from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, NumericColumnStrategy, \
-    CategoricalColumnWithVOCListStrategy, IndicatorColumnWithVOCListStrategy
+from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.Specifications import Specification
-from AIBuilder.Data import MetaData, DataModel, DataLoader, DataSetSplitter
+from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
 import os
@@ -479,11 +478,11 @@ class MetadataBuilder(Builder):
 
 
 class FeatureColumnBuilder(Builder):
-    SPLIT_TO_BINARY = 'split_to_binary' # todo: write
-    valid_column_types = [CategoricalColumnWithVOCListStrategy.CATEGORICAL_COLUMN_VOC_LIST,
-                          NumericColumnStrategy.NUMERICAL_COLUMN,
-                          IndicatorColumnWithVOCListStrategy.INDICATOR_COLUMN_VOC_LIST,
-                          SPLIT_TO_BINARY]
+
+    valid_column_types = [FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
+                          FeatureColumnStrategy.NUMERICAL_COLUMN,
+                          FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
+                          FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS]
 
     def __init__(self, feature_columns: dict):
         super().__init__()
@@ -541,21 +540,6 @@ class FeatureColumnBuilder(Builder):
             column_strategy = FeatureColumnStrategyFactory.get_strategy(feature_column_info['name'],
                                                                         feature_column_info['type'],
                                                                         data_model)
-
-            # if feature_column_info['type'] is self.CATEGORICAL_COLUMN_VOC_LIST:
-            #     column_strategy = CategoricalColumnWithVOCListStrategy(data_model=data_model,
-            #                                                            column_name=feature_column_info['name'])
-            #
-            # elif feature_column_info['type'] is self.NUMERICAL_COLUMN:
-            #     column_strategy = NumericColumnStrategy(data_model=data_model, column_name=feature_column_info['name'])
-            #
-            # elif feature_column_info['type'] is self.INDICATOR_COLUMN_VOC_LIST:
-            #     column_strategy = IndicatorColumnWithVOCListStrategy(data_model=data_model,
-            #                                                          column_name=feature_column_info['name'])
-            #
-            # elif feature_column_info['type'] is self.SPLIT_TO_BINARY:
-            #     column = self.build_binary_cat_columns(feature_column_info, data)
-
             tf_feature_columns.append(column_strategy.build())
 
         return tf_feature_columns

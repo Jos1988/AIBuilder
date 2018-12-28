@@ -3,7 +3,8 @@ from AIBuilder.Data import DataModel, MetaData
 import pandas as pd
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
-    ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleHotScrubber
+    ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
+    MultipleCatListToMultipleHotScrubber
 
 
 class TestMissingDataScrubber(unittest.TestCase):
@@ -335,7 +336,7 @@ class TestMakeCategoricalScrubber(unittest.TestCase):
         self.assertEqual(self.df['num_1'].dtype, 'int64')
 
 
-class TestMultipleHotColumnScrubber(unittest.TestCase):
+class TestMultipleCatToListColumnScrubber(unittest.TestCase):
 
     def setUp(self):
         data = {
@@ -353,11 +354,58 @@ class TestMultipleHotColumnScrubber(unittest.TestCase):
         self.data_model.metadata = metadata
 
     def testScrubbing(self):
-        scrubber = MultipleHotScrubber(sepperator=',')
+        scrubber = MultipleCatToListScrubber(sepperator=',')
         scrubber.scrub(self.data_model)
 
         first_item = self.data_model.get_dataframe()['mh_1'][0]
         self.assertIsInstance(first_item, list)
+
+
+class TestMultipleCatListToMultipleHot(unittest.TestCase):
+
+    def testScrubbing(self):
+        data = {
+            'num_1': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'list_1': [['EUR', 'USD'], ['USD', 'JPY', 'AUD'], ['EUR'], ['EUR', 'GBP', 'AUD'], ['USD'], ['EUR', 'JPY'],
+                       ['EUR', 'GBP'], ['USD', 'JPY'], ['EUR', 'GBP'],
+                       ['USD']],
+        }
+
+        metadata = MetaData()
+        metadata.define_numerical_columns(['num_1'])
+        metadata.define_multiple_cat_columns(['list_1'])
+
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+        scrubber = MultipleCatListToMultipleHotScrubber(col_name='list_1')
+        scrubber.validate(self.data_model)
+        scrubber.scrub(self.data_model)
+
+        new_df = self.data_model.get_dataframe()
+        columns = list(new_df.columns.values)
+
+        # test new columns
+        self.assertEqual(len(columns), 7)
+        self.assertIn('list_1_EUR', columns)
+        self.assertIn('list_1_GBP', columns)
+        self.assertIn('list_1_USD', columns)
+        self.assertIn('list_1_JPY', columns)
+        self.assertIn('list_1_AUD', columns)
+
+        # check column contents
+        has_EUR_series = new_df['list_1_EUR']
+        self.assertEqual(list(has_EUR_series.to_dict().values()), [1, 0, 1, 1, 0, 1, 1, 0, 1, 0])
+
+        # test metadata
+        meta_data_categorical_cols = self.data_model.metadata.binary_columns
+        self.assertEqual(len(meta_data_categorical_cols), 5)
+        self.assertIn('list_1_EUR', columns)
+        self.assertIn('list_1_GBP', columns)
+        self.assertIn('list_1_USD', columns)
+        self.assertIn('list_1_JPY', columns)
+        self.assertIn('list_1_AUD', columns)
 
 
 if __name__ == '__main__':

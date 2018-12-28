@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
+from typing import List
+from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
 from AIBuilder.Data import DataModel, MetaData
 from currency_converter import CurrencyConverter
 from datetime import datetime
 import numpy as np
 from scipy import stats
+import pandas as pd
 
 
 class Scrubber(ABC):
@@ -298,7 +301,7 @@ class MakeCategoricalScrubber(Scrubber):
         return data_model
 
 
-class MultipleHotScrubber(Scrubber):
+class MultipleCatToListScrubber(Scrubber):
 
     @property
     def scrubber_config_list(self):
@@ -320,3 +323,92 @@ class MultipleHotScrubber(Scrubber):
             df[column] = df[column].str.split(self.sepperator)
 
         return data_model.set_dataframe(df)
+
+
+class MultipleCatListToMultipleHotScrubber(Scrubber):
+
+    def __init__(self, col_name: str, exclusion_list: List[str] = None):
+        self.col_name = DataTypeSpecification('col_name', col_name, str)
+        self.exclusion_list = NullSpecification('exclusion_service')
+        if exclusion_list is not None:
+            self.exclusion_list = DataTypeSpecification('exclusion_list', exclusion_list, list)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.col_name(): MetaData.MULTIPLE_CAT_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        assert self.col_name() in data_model.get_dataframe()
+        assert MetaData.MULTIPLE_CAT_DATA_TYPE == data_model.metadata.get_column_type(self.col_name())
+
+    def update_metadata(self, meta_data: MetaData):
+        meta_data.remove_column(self.col_name())
+        meta_data.add_column_to_type(self.col_name(), MetaData.MULTIPLE_HOT_DATA_TYPE)
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        inputColumn = self.get_input_column(data_model)
+
+        categories = self.get_categories(data_model)
+        m_hot_data = self.get_new_data_set(categories)
+        m_hot_data = self.fill_new_data_set(categories, inputColumn, m_hot_data)
+
+        data_model = self.add_binary_data_to_model(data_model, m_hot_data)
+        data_model = self.update_metadata_on_scrub(data_model, m_hot_data)
+
+        return data_model
+
+    def get_input_column(self, data_model):
+        df = data_model.get_dataframe()
+        inputColumn = df[self.col_name()]
+
+        return inputColumn
+
+    @staticmethod
+    def update_metadata_on_scrub(data_model, m_hot_data):
+        binary_columns = list(m_hot_data.keys())
+        metadata = data_model.metadata
+        metadata.define_binary_columns(binary_columns)
+        data_model.metadata = metadata
+
+        return data_model
+
+    @staticmethod
+    def add_binary_data_to_model(data_model: DataModel, m_hot_data: dict) -> DataModel:
+        df = data_model.get_dataframe()
+        for binary_column_name, binary_data in m_hot_data.items():
+            df[binary_column_name] = binary_data
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+    def get_categories(self, data_model):
+        categories_grabber = FromListCategoryGrabber(
+            data_model=data_model,
+            column_name=self.col_name(),
+            exclusion_list=self.exclusion_list())
+        categories = categories_grabber.grab()
+
+        return categories
+
+    def fill_new_data_set(self, categories: List[str], input_column: pd.Series, m_hot_data: dict):
+        data = input_column.to_dict().values()
+        for item_categories in data:
+            for category in categories:
+                occurrences = list(item_categories).count(category)
+                binary_column_name = self.col_name() + '_' + category
+                if occurrences > 0:
+                    m_hot_data[binary_column_name].append(1)
+                    continue
+
+                m_hot_data[binary_column_name].append(0)
+
+        return m_hot_data
+
+    def get_new_data_set(self, categories: list):
+        m_hot_data = {}
+        for cat in categories:
+            binary_cat_name = self.col_name() + '_' + cat
+            m_hot_data[binary_cat_name] = []
+
+        return m_hot_data
