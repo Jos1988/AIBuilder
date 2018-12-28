@@ -6,6 +6,7 @@ from AIBuilder import AI
 
 class EstimatorStrategy(ABC):
     LINEAR_REGRESSOR = 'linear_regressor'
+    DNN_REGRESSOR = 'dnn_regressor'
 
     def __init__(self, ml_model: AI):
         self.ML_Model = ml_model
@@ -47,12 +48,31 @@ class LinearRegressorStrategy(EstimatorStrategy):
         return estimator
 
     def validate_result(self):
-        print(self.result)
         assert isinstance(self.result, tf.estimator.LinearRegressor)
 
     @staticmethod
     def estimator_type() -> str:
         return EstimatorStrategy.LINEAR_REGRESSOR
+
+
+class DNNRegressorStrategy(EstimatorStrategy):
+
+    def build_estimator(self) -> tf.feature_column:
+        estimator = tf.estimator.DNNRegressor(
+            feature_columns=self.ML_Model.training_data.get_tf_feature_columns(),
+            hidden_units=[1024, 512, 256],
+            optimizer=self.ML_Model.optimizer,
+            model_dir=self.get_model_dir(),
+        )
+
+        return estimator
+
+    def validate_result(self):
+        assert isinstance(self.result, tf.estimator.DNNRegressor)
+
+    @staticmethod
+    def estimator_type() -> str:
+        return EstimatorStrategy.DNN_REGRESSOR
 
 
 # Is there a bridge pattern here?

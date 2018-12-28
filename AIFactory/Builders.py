@@ -168,8 +168,7 @@ class DataSplitterBuilder(Builder):
 
 
 class EstimatorBuilder(Builder):
-    LINEAR_REGRESSOR = 'linear_regressor'
-    valid_estimator_types = [LINEAR_REGRESSOR]
+    valid_estimator_types = [EstimatorStrategy.LINEAR_REGRESSOR, EstimatorStrategy.DNN_REGRESSOR]
     estimator: str
     estimator_type = None
 

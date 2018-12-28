@@ -2,7 +2,8 @@ import unittest
 from unittest import mock
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AI
-from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy, LinearRegressorStrategy, EstimatorStrategyFactory
+from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy, LinearRegressorStrategy, \
+    EstimatorStrategyFactory, DNNRegressorStrategy
 
 
 class AbstractEstimatorStrategyTester(ABC):
@@ -40,6 +41,15 @@ class TestLinearRegressorStrategy(AbstractEstimatorStrategyTester, unittest.Test
         self.assertIsNotNone(result)
 
 
+class TestDNNRegressorStrategy(AbstractEstimatorStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> EstimatorStrategy:
+        return DNNRegressorStrategy
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
 class TestEstimatorStrategyFactory(unittest.TestCase):
 
     def setUp(self):
@@ -47,4 +57,8 @@ class TestEstimatorStrategyFactory(unittest.TestCase):
 
     def test_LinearRegressor(self):
         strategy = EstimatorStrategyFactory.get_strategy(self.ml_model, EstimatorStrategy.LINEAR_REGRESSOR)
+        self.assertIsInstance(strategy, LinearRegressorStrategy)
+
+    def test_DNNRegressor(self):
+        strategy = EstimatorStrategyFactory.get_strategy(self.ml_model, EstimatorStrategy.DNN_REGRESSOR)
         self.assertIsInstance(strategy, LinearRegressorStrategy)
