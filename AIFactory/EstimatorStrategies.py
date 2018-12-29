@@ -8,8 +8,9 @@ class EstimatorStrategy(ABC):
     LINEAR_REGRESSOR = 'linear_regressor'
     DNN_REGRESSOR = 'dnn_regressor'
 
-    def __init__(self, ml_model: AI):
+    def __init__(self, ml_model: AI, **kwargs):
         self.ML_Model = ml_model
+        self.kwargs = kwargs
         self.result = None
 
     def build(self) -> tf.estimator:
@@ -58,14 +59,26 @@ class LinearRegressorStrategy(EstimatorStrategy):
 class DNNRegressorStrategy(EstimatorStrategy):
 
     def build_estimator(self) -> tf.feature_column:
-        estimator = tf.estimator.DNNRegressor(
-            feature_columns=self.ML_Model.training_data.get_tf_feature_columns(),
-            hidden_units=[1024, 512, 256],
-            optimizer=self.ML_Model.optimizer,
-            model_dir=self.get_model_dir(),
-        )
+        kwargs = {'feature_columns': self.ML_Model.training_data.get_tf_feature_columns(),
+                  'optimizer': self.ML_Model.optimizer,
+                  'model_dir': self.get_model_dir(), }
+
+        kwargs.update(self.kwargs)
+        self.validate_kwargs(kwargs)
+        estimator = tf.estimator.DNNRegressor(**kwargs)
 
         return estimator
+
+    @staticmethod
+    def kwarg_requirements() -> dict:
+        return {'hidden_units': list}
+
+    def validate_kwargs(self, kwargs):
+        kwarg_min_requirements = self.kwarg_requirements()
+        for key, data_type in kwarg_min_requirements.items():
+            assert key in kwargs, 'DNNRegressor missing requires argument: {}.'.format(key)
+            assert type(kwargs[key]) is data_type, 'DNNRegressor argument for {} must be {}, {} given ({})' \
+                .format(key, data_type, type(kwargs[key]), kwargs[key])
 
     def validate_result(self):
         assert isinstance(self.result, tf.estimator.DNNRegressor)
@@ -79,6 +92,7 @@ class DNNRegressorStrategy(EstimatorStrategy):
 class EstimatorStrategyFactory:
     strategies = [
         LinearRegressorStrategy,
+        DNNRegressorStrategy
     ]  # type: List[EstimatorStrategy]
 
     @staticmethod

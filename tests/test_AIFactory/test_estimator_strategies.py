@@ -16,7 +16,11 @@ class AbstractEstimatorStrategyTester(ABC):
         self.ml_model.optimizer = mock.Mock()
         self.ml_model.training_data = mock.Mock()
         self.ml_model.training_data.get_tf_feature_columns = mock.Mock()
-        self.strategy = strategy_class(self.ml_model)
+
+        kwargs = {'ml_model': self.ml_model}
+        kwargs.update(self.additional_parameters())
+
+        self.strategy = strategy_class(**kwargs)
 
     @property
     @abstractmethod
@@ -26,6 +30,9 @@ class AbstractEstimatorStrategyTester(ABC):
     def testBuild(self):
         result = self.strategy.build_estimator()
         self.assert_result(result)
+
+    def additional_parameters(self):
+        return {}
 
     @abstractmethod
     def assert_result(self, result):
@@ -46,6 +53,43 @@ class TestDNNRegressorStrategy(AbstractEstimatorStrategyTester, unittest.TestCas
     def get_strategy_class_name(self) -> EstimatorStrategy:
         return DNNRegressorStrategy
 
+    def additional_parameters(self):
+        return {'hidden_units': [5, 10, 5]}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestDNNRegressorStrategy2(AbstractEstimatorStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> EstimatorStrategy:
+        return DNNRegressorStrategy
+
+    def additional_parameters(self):
+        return {'hidden_units': 'should be list'}
+
+    def testBuild(self):
+        with self.assertRaises(AssertionError):
+            result = self.strategy.build_estimator()
+            self.assert_result(result)
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestDNNRegressorStrategy3(AbstractEstimatorStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> EstimatorStrategy:
+        return DNNRegressorStrategy
+
+    def additional_parameters(self):
+        return {}
+
+    def testBuild(self):
+        with self.assertRaises(AssertionError):
+            result = self.strategy.build_estimator()
+            self.assert_result(result)
+
     def assert_result(self, result):
         self.assertIsNotNone(result)
 
@@ -61,4 +105,4 @@ class TestEstimatorStrategyFactory(unittest.TestCase):
 
     def test_DNNRegressor(self):
         strategy = EstimatorStrategyFactory.get_strategy(self.ml_model, EstimatorStrategy.DNN_REGRESSOR)
-        self.assertIsInstance(strategy, LinearRegressorStrategy)
+        self.assertIsInstance(strategy, DNNRegressorStrategy)
