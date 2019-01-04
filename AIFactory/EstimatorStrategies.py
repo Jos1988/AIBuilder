@@ -88,7 +88,6 @@ class DNNRegressorStrategy(EstimatorStrategy):
         return EstimatorStrategy.DNN_REGRESSOR
 
 
-# Is there a bridge pattern here?
 class EstimatorStrategyFactory:
     strategies = [
         LinearRegressorStrategy,
@@ -96,10 +95,14 @@ class EstimatorStrategyFactory:
     ]  # type: List[EstimatorStrategy]
 
     @staticmethod
-    def get_strategy(ml_model: AI, estimator_type: str):
+    def get_strategy(ml_model: AI, estimator_type: str, kwargs: dict = None):
+
+        strategy_kwargs = {'ml_model': ml_model}
+        if kwargs is not None:
+            strategy_kwargs.update(kwargs)
 
         for strategy in EstimatorStrategyFactory.strategies:
             if estimator_type == strategy.estimator_type():
-                return strategy(ml_model)
+                return strategy(**strategy_kwargs)
 
         raise RuntimeError('Estimator type ({}) not found.'.format(estimator_type))

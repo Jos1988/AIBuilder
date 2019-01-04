@@ -172,9 +172,13 @@ class EstimatorBuilder(Builder):
     estimator: str
     estimator_type = None
 
-    def __init__(self, estimator_type: str):
+    def __init__(self, estimator_type: str, kwargs: dict = None):
         super().__init__()
         self.set_estimator(estimator_type)
+
+        self.kwargs = NullSpecification('kwargs')
+        if kwargs is not None:
+            self.kwargs = TypeSpecification('kwargs', kwargs, dict)
 
     @property
     def dependent_on(self) -> list:
@@ -191,9 +195,11 @@ class EstimatorBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        strategy: EstimatorStrategy = EstimatorStrategyFactory.get_strategy(neural_net, self.estimator_type())
+        strategy: EstimatorStrategy = EstimatorStrategyFactory.get_strategy(neural_net,
+                                                                            self.estimator_type(),
+                                                                            self.kwargs())
 
-        assert strategy is not None, 'Strategy for building Estimator of type {} not found.'\
+        assert strategy is not None, 'Strategy for building Estimator of type {} not found.' \
             .format(self.estimator_type())
 
         estimator = strategy.build()
@@ -333,13 +339,13 @@ class NamingSchemeBuilder(Builder):
 
 class OptimizerBuilder(Builder):
     LEARNING_RATE = 'learning_rate'
-    GRADIENT_CLIPPING = 'gradient_clipping'
 
     GRADIENT_DESCENT_OPTIMIZER = 'gradient_descent_optimizer'
 
     valid_optimizer_types = [GRADIENT_DESCENT_OPTIMIZER]
 
-    def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[float] = None):
+    def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[str],
+                 kwargs: dict = None):
         super().__init__()
         self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, self.valid_optimizer_types)
         self.learning_rate = DataTypeSpecification('learning_rate', learning_rate, float)
@@ -347,6 +353,10 @@ class OptimizerBuilder(Builder):
         self.gradient_clipping = NullSpecification('gradient_clipping')
         if gradient_clipping is not None:
             self.gradient_clipping = DataTypeSpecification('gradient_clipping', gradient_clipping, float)
+
+        self.kwargs = NullSpecification('kwargs')
+        if kwargs is not None:
+            self.kwargs = DataTypeSpecification('kwargs', kwargs, dict)
 
     @property
     def dependent_on(self) -> list:
@@ -360,20 +370,19 @@ class OptimizerBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        my_optimizer = self._set_optimizer(optimizer_type=self.optimizer_type(), learning_rate=self.learning_rate())
+        strategy: OptimizerStrategy = optimizerStrategyFactory.get_strategy(neural_net,
+                                                                            self.optimizer_type(),
+                                                                            self.learning_rate(),
+                                                                            self.gradient_clipping(),
+                                                                            self.kwargs())
 
-        if self.gradient_clipping() is not None:
-            my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, self.gradient_clipping())
+        assert strategy is not None, 'Strategy for building Optimizer of type {} not found.' \
+            .format(self.optimizer_type())
 
-        neural_net.set_optimizer(my_optimizer)
+        optimizer = strategy.build()
+        neural_net.set_optimizer(optimizer)
 
-    def _set_optimizer(self, optimizer_type: str, learning_rate: float) -> tf.train.Optimizer:
-        if optimizer_type is self.GRADIENT_DESCENT_OPTIMIZER:
-            my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-
-            return my_optimizer
-
-        raise RuntimeError('Optimizer not set.')
+        return
 
 
 class ScrubAdapter(Builder):
@@ -476,7 +485,6 @@ class MetadataBuilder(Builder):
 
 
 class FeatureColumnBuilder(Builder):
-
     valid_column_types = [FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
                           FeatureColumnStrategy.NUMERICAL_COLUMN,
                           FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,

@@ -104,5 +104,10 @@ class TestEstimatorStrategyFactory(unittest.TestCase):
         self.assertIsInstance(strategy, LinearRegressorStrategy)
 
     def test_DNNRegressor(self):
-        strategy = EstimatorStrategyFactory.get_strategy(self.ml_model, EstimatorStrategy.DNN_REGRESSOR)
+        additional_arguments = {'test': 1}
+        strategy = EstimatorStrategyFactory.get_strategy(self.ml_model,
+                                                         EstimatorStrategy.DNN_REGRESSOR,
+                                                         kwargs=additional_arguments)
+
         self.assertIsInstance(strategy, DNNRegressorStrategy)
+        self.assertDictEqual(strategy.kwargs, additional_arguments)
