@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Union
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
 from AIBuilder.Data import DataModel, MetaData
@@ -252,7 +252,6 @@ class OutlierScrubber(Scrubber):
             return
 
         for column, z in self.col_z().items():
-            print(data_model.metadata)
             column_data_type = data_model.metadata.get_column_type(column=column)
             assert MetaData.NUMERICAL_DATA_TYPE == column_data_type, \
                 '{} column passed to outlier scrubber not numerical but {}.'.format(column, column_data_type)
@@ -347,7 +346,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
                 'column_cat4': [0, 1]}
     """
 
-    def __init__(self, col_name: str, exclusion_list: List[str] = None):
+    def __init__(self, col_name: str, exclusion_list: List[str] = None, inclusion_threshold: float = None):
         """
 
         :param col_name:        column name (must be MULTIPLE_CAT_DATA_TYPE) and will be transformed into MULTIPLE_HOT_DATA_TYPE)
@@ -357,6 +356,12 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
         self.exclusion_list = NullSpecification('exclusion_service')
         if exclusion_list is not None:
             self.exclusion_list = DataTypeSpecification('exclusion_list', exclusion_list, list)
+
+        self.inclusion_threshold = NullSpecification('inclusion_threshold')
+        if inclusion_threshold is not None:
+            self.inclusion_threshold = DataTypeSpecification('inclusion_threshold', inclusion_threshold, float)
+
+        print(self.inclusion_threshold)
 
     @property
     def scrubber_config_list(self):
@@ -399,11 +404,16 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
         return data_model
 
-    @staticmethod
-    def add_binary_data_to_model(data_model: DataModel, m_hot_data: dict) -> DataModel:
+    def add_binary_data_to_model(self, data_model: DataModel, m_hot_data: dict) -> DataModel:
         df = data_model.get_dataframe()
+        data_length = len(df)
+        nominal_threshold = None
+        if self.inclusion_threshold() is not None:
+            nominal_threshold = self.inclusion_threshold() * len(df)
+
         for binary_column_name, binary_data in m_hot_data.items():
-            df[binary_column_name] = binary_data
+            if self.meets_inclusion_threshold(binary_data, nominal_threshold, data_length):
+                df[binary_column_name] = binary_data
 
         data_model.set_dataframe(df)
 
@@ -439,3 +449,16 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
             m_hot_data[binary_cat_name] = []
 
         return m_hot_data
+
+    @staticmethod
+    def meets_inclusion_threshold(binary_data: list, min_threshold: Union[None, int], data_length: int):
+        if min_threshold is None:
+            return True
+
+        positive_count = binary_data.count(1)
+        max_threshold = data_length - min_threshold
+
+        if min_threshold <= positive_count <= max_threshold:
+            return True
+
+        return False

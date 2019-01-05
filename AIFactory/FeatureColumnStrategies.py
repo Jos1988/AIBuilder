@@ -13,16 +13,16 @@ class FeatureColumnStrategy(ABC):
     def __init__(self, column_name: str, data_model: DataModel):
         self.data_model = data_model
         self.column_name = column_name
-        self.result = None
+        self.results = None
 
-    def build(self) -> tf.feature_column:
-        self.result = self.build_column()
+    def build(self) -> list:
+        self.results = self.build_column()
         self.validate_result()
 
-        return self.result
+        return self.results
 
     @abstractmethod
-    def build_column(self) -> tf.feature_column:
+    def build_column(self):
         pass
 
     @abstractmethod
@@ -37,11 +37,12 @@ class FeatureColumnStrategy(ABC):
 
 class NumericColumnStrategy(FeatureColumnStrategy):
 
-    def build_column(self) -> tf.feature_column:
-        return tf.feature_column.numeric_column(self.column_name)
+    def build_column(self) -> list:
+        return [tf.feature_column.numeric_column(self.column_name)]
 
     def validate_result(self):
-        assert self.result.__class__.__name__ == '_NumericColumn'
+        for result in self.results:
+            assert result.__class__.__name__ == '_NumericColumn'
 
     @staticmethod
     def column_types() -> list:
@@ -50,17 +51,20 @@ class NumericColumnStrategy(FeatureColumnStrategy):
 
 class CategoricalColumnWithVOCListStrategy(FeatureColumnStrategy):
 
-    def build_column(self) -> tf.feature_column:
+    def build_column(self) -> list:
         category_grabber = SimpleCategoryGrabber(data_model=self.data_model, column_name=self.column_name)
         categories = category_grabber.grab()
 
-        return tf.feature_column.categorical_column_with_vocabulary_list(
+        new_column = tf.feature_column.categorical_column_with_vocabulary_list(
             self.column_name,
             vocabulary_list=categories
         )
 
+        return [new_column]
+
     def validate_result(self):
-        assert self.result.__class__.__name__ == '_VocabularyListCategoricalColumn'
+        for result in self.results:
+            assert result.__class__.__name__ == '_VocabularyListCategoricalColumn'
 
     @staticmethod
     def column_types() -> list:
@@ -69,7 +73,7 @@ class CategoricalColumnWithVOCListStrategy(FeatureColumnStrategy):
 
 class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
-    def build_column(self) -> tf.feature_column:
+    def build_column(self) -> list:
         category_grabber = FromListCategoryGrabber(data_model=self.data_model, column_name=self.column_name)
         categories = category_grabber.grab()
 
@@ -78,10 +82,13 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
             vocabulary_list=categories
         )
 
-        return tf.feature_column.indicator_column(categorical_column)
+        indicator_column = tf.feature_column.indicator_column(categorical_column)
+
+        return [indicator_column]
 
     def validate_result(self):
-        assert self.result.__class__.__name__ == '_IndicatorColumn'
+        for result in self.results:
+            assert result.__class__.__name__ == '_IndicatorColumn'
 
     @staticmethod
     def column_types() -> list:
@@ -90,12 +97,13 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
 class MultipleHotFeatureStrategy(FeatureColumnStrategy):
 
-    def build_column(self) -> tf.feature_column:
+    def build_column(self) -> list:
         df = self.data_model.get_dataframe()
         binary_feature_cols = []
 
+        column_prefix = self.column_name + '_'
         for column in df:
-            if self.column_name in column:
+            if column_prefix in column:
                 new_binary_feature_col = tf.feature_column.categorical_column_with_identity(
                     key=column,
                     num_buckets=2)
@@ -104,8 +112,7 @@ class MultipleHotFeatureStrategy(FeatureColumnStrategy):
         return binary_feature_cols
 
     def validate_result(self):
-        assert type(self.result) is list
-        for result in self.result:
+        for result in self.results:
             assert result.__class__.__name__ == '_IdentityCategoricalColumn'
 
     @staticmethod

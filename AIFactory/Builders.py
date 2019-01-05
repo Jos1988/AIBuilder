@@ -551,6 +551,8 @@ class FeatureColumnBuilder(Builder):
             column_strategy = FeatureColumnStrategyFactory.get_strategy(feature_column_info['name'],
                                                                         feature_column_info['type'],
                                                                         data_model)
-            tf_feature_columns.append(column_strategy.build())
+
+            feature_columns = column_strategy.build()
+            tf_feature_columns = feature_columns + tf_feature_columns
 
         return tf_feature_columns

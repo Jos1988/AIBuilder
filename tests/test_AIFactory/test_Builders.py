@@ -273,9 +273,8 @@ class TestScrubAdapter(unittest.TestCase):
 
         self.scrub_adapter.build(arti)
 
-        and_scrubber.validate_metadata.assert_any_call(training_data.metadata),
+        and_scrubber.validate_metadata.assert_called(),
         and_scrubber.scrub.assert_any_call(training_data),
-        and_scrubber.validate_metadata.assert_any_call(evaluation_data.metadata),
         and_scrubber.scrub.assert_any_call(evaluation_data)
 
 
@@ -403,9 +402,9 @@ class TestFeatureColumnBuilder(unittest.TestCase):
         builder.build(arti)
 
         feature_columns = training_model.get_tf_feature_columns()
-        col1_cat_column = feature_columns[0]
+        col1_cat_column = feature_columns[2]
         col3_num_column = feature_columns[1]
-        col4_indicator_column = feature_columns[2]
+        col4_indicator_column = feature_columns[0]
 
         arti.set_training_data.assert_called_once()
 

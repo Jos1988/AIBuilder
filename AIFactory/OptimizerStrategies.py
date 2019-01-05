@@ -65,7 +65,6 @@ class GradientDescentOptimizerStrategy(OptimizerStrategy):
 
     def validate_result(self):
         if self.gradient_clipping is None:
-            print(self.result, type(self.result))
             assert isinstance(self.result, tf.train.GradientDescentOptimizer)
 
     @staticmethod

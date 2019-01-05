@@ -45,6 +45,7 @@ class TestNumericColumnStrategy(AbstractFCStrategyTester, unittest.TestCase):
         return {}
 
     def assert_result(self, result):
+        result = result[0]
         self.assertIsNotNone(result)
 
 
@@ -57,6 +58,7 @@ class TestCategoricalColumnWithVOCListStrategy(AbstractFCStrategyTester, unittes
         return {'col': ['cat1', 'cat2', 'cat1']}
 
     def assert_result(self, result):
+        result = result[0]
         self.assertIsNotNone(result)
         self.assertListEqual(list(result.vocabulary_list), ['cat1', 'cat2'])
 
@@ -70,6 +72,7 @@ class TestIndicatorColumnWithVOCListStrategy(AbstractFCStrategyTester, unittest.
         return {'col': [['cat1', 'cat2'], ['cat1', 'cat3']]}
 
     def assert_result(self, result):
+        result = result[0]
         self.assertIsNotNone(result)
         self.assertListEqual(list(result.categorical_column.vocabulary_list), ['cat1', 'cat2', 'cat3'])
 
