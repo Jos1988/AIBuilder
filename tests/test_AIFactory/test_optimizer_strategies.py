@@ -3,7 +3,7 @@ from unittest import mock
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AI
 from AIBuilder.AIFactory.OptimizerStrategies import GradientDescentOptimizerStrategy, OptimizerStrategy, \
-    OptimizerStrategyFactory
+    OptimizerStrategyFactory, AdagradOptimizerStrategy, AdaDeltaOptimizerStrategy, AdamOptimizerStrategy
 
 
 class AbstractOptimizerStrategyTester(ABC):
@@ -28,7 +28,7 @@ class AbstractOptimizerStrategyTester(ABC):
         pass
 
     def testBuild(self):
-        result = self.strategy.build_optimizer()
+        result = self.strategy.build()
         self.assert_result(result)
 
     def additional_parameters(self):
@@ -39,7 +39,7 @@ class AbstractOptimizerStrategyTester(ABC):
         pass
 
 
-class TestGradientDescentOptimizerStrategy(AbstractOptimizerStrategyTester, unittest.TestCase):
+class TestGradientDescentOptimizerStrategy1(AbstractOptimizerStrategyTester, unittest.TestCase):
 
     def get_strategy_class_name(self) -> OptimizerStrategy:
         return GradientDescentOptimizerStrategy
@@ -87,7 +87,79 @@ class TestGradientDescentOptimizerStrategy4(AbstractOptimizerStrategyTester, uni
         self.assertIsNotNone(result)
 
 
-class TestEstimatorStrategyFactory(unittest.TestCase):
+class TestAdagradOptimizerStrategy1(AbstractOptimizerStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> OptimizerStrategy:
+        return AdagradOptimizerStrategy
+
+    def additional_parameters(self):
+        return {'gradient_clipping': 5}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestAdagradOptimizerStrategy2(AbstractOptimizerStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> OptimizerStrategy:
+        return AdagradOptimizerStrategy
+
+    def additional_parameters(self):
+        return {}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestAdaDeltaOptimizerStrategy1(AbstractOptimizerStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> OptimizerStrategy:
+        return AdaDeltaOptimizerStrategy
+
+    def additional_parameters(self):
+        return {'gradient_clipping': 5}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestAdaDeltaOptimizerStrategy2(AbstractOptimizerStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> OptimizerStrategy:
+        return AdaDeltaOptimizerStrategy
+
+    def additional_parameters(self):
+        return {}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestAdamOptimizerStrategy1(AbstractOptimizerStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> OptimizerStrategy:
+        return AdamOptimizerStrategy
+
+    def additional_parameters(self):
+        return {'gradient_clipping': 5}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestAdamOptimizerStrategy2(AbstractOptimizerStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> OptimizerStrategy:
+        return AdamOptimizerStrategy
+
+    def additional_parameters(self):
+        return {}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestOptimizerStrategyFactory(unittest.TestCase):
 
     def setUp(self):
         self.ml_model = AI(project_name='test', log_dir='test/dir', name='test')
@@ -127,3 +199,27 @@ class TestEstimatorStrategyFactory(unittest.TestCase):
             learning_rate=0.1)
 
         self.assertIsInstance(strategy, GradientDescentOptimizerStrategy)
+
+    def test_AdagradOptimizer4(self):
+        strategy = OptimizerStrategyFactory.get_strategy(
+            ml_model=self.ml_model,
+            optimizer_type=OptimizerStrategy.ADAGRAD_OPTIMIZER,
+            learning_rate=0.1)
+
+        self.assertIsInstance(strategy, AdagradOptimizerStrategy)
+
+    def test_AdadeltaDescentOptimizer4(self):
+        strategy = OptimizerStrategyFactory.get_strategy(
+            ml_model=self.ml_model,
+            optimizer_type=OptimizerStrategy.ADADELTA_OPTIMIZER,
+            learning_rate=0.1)
+
+        self.assertIsInstance(strategy, AdaDeltaOptimizerStrategy)
+
+    def test_AdamOptimizer4(self):
+        strategy = OptimizerStrategyFactory.get_strategy(
+            ml_model=self.ml_model,
+            optimizer_type=OptimizerStrategy.ADAM_OPTIMIZER,
+            learning_rate=0.1)
+
+        self.assertIsInstance(strategy, AdamOptimizerStrategy)

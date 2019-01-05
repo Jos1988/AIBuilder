@@ -1,6 +1,8 @@
 from unittest import mock
 from AIBuilder.AI import AI, AbstractAI
+from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategy
+from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategy
 from AIBuilder.Data import DataModel
 from AIBuilder.AIFactory.Specifications import TypeSpecification
 import unittest
@@ -84,16 +86,16 @@ class TestDataBuilder(unittest.TestCase):
 class TestEstimatorBuilder(unittest.TestCase):
 
     def test_validate(self):
-        estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
         estimator_builder.validate()
 
     def test_invalid_estimator_type(self):
-        invalid_estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        invalid_estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
         invalid_estimator_builder.estimator_type = TypeSpecification(name=EstimatorBuilder.ESTIMATOR,
                                                                      value='invalid',
                                                                      valid_types=EstimatorBuilder.valid_estimator_types)
 
-        valid_estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        valid_estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
 
         with self.assertRaises(AssertionError):
             invalid_estimator_builder.validate()
@@ -110,7 +112,7 @@ class TestEstimatorBuilder(unittest.TestCase):
         mock_data_model = mock.MagicMock()
         mock_optimizer = mock.MagicMock()
 
-        estimator_builder = EstimatorBuilder(EstimatorBuilder.LINEAR_REGRESSOR)
+        estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
 
         mock_data_model.get_tf_feature_columns.return_value = []
 
@@ -188,11 +190,11 @@ class TestOptimizerBuilder(unittest.TestCase):
 
     def test_valid_validate(self):
         optimizer_builder_no_clipping = OptimizerBuilder(
-            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            optimizer_type=OptimizerStrategy.GRADIENT_DESCENT_OPTIMIZER,
             learning_rate=1.0)
 
         optimizer_builder_with_clipping = OptimizerBuilder(
-            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            optimizer_type=OptimizerStrategy.GRADIENT_DESCENT_OPTIMIZER,
             learning_rate=1.0,
             gradient_clipping=1.0)
 
@@ -215,7 +217,7 @@ class TestOptimizerBuilder(unittest.TestCase):
         arti.set_optimizer = mock.Mock()
 
         optimizer_builder_with_clipping = OptimizerBuilder(
-            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            optimizer_type=OptimizerStrategy.GRADIENT_DESCENT_OPTIMIZER,
             learning_rate=1.0,
             gradient_clipping=0.1)
 
@@ -224,18 +226,16 @@ class TestOptimizerBuilder(unittest.TestCase):
         mock_optimizer.assert_called_with(learning_rate=1.0)
         mock_clipper.assert_called()
 
-    @mock.patch('AIBuilder.AIFactory.Builders.tf.train.GradientDescentOptimizer')
-    def test_build_with_no_clipping(self, mock_optimizer):
+    def test_build_with_no_clipping(self, ):
         arti = mock.Mock('OptimizerBuilder.AbstractAI')
         arti.set_optimizer = mock.Mock()
 
         optimizer_builder_no_clipping = OptimizerBuilder(
-            optimizer_type=OptimizerBuilder.GRADIENT_DESCENT_OPTIMIZER,
+            optimizer_type=OptimizerStrategy.GRADIENT_DESCENT_OPTIMIZER,
             learning_rate=1.0)
 
         optimizer_builder_no_clipping.build(arti)
         arti.set_optimizer.assert_called_once()
-        mock_optimizer.assert_called_with(learning_rate=1.0)
 
 
 class TestScrubAdapter(unittest.TestCase):

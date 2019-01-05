@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
+from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategyFactory, OptimizerStrategy
 from AIBuilder.AIFactory.Specifications import Specification
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
@@ -340,11 +341,14 @@ class NamingSchemeBuilder(Builder):
 class OptimizerBuilder(Builder):
     LEARNING_RATE = 'learning_rate'
 
-    GRADIENT_DESCENT_OPTIMIZER = 'gradient_descent_optimizer'
+    valid_optimizer_types = [
+        OptimizerStrategy.GRADIENT_DESCENT_OPTIMIZER,
+        OptimizerStrategy.ADAM_OPTIMIZER,
+        OptimizerStrategy.ADAGRAD_OPTIMIZER,
+        OptimizerStrategy.ADADELTA_OPTIMIZER
+    ]
 
-    valid_optimizer_types = [GRADIENT_DESCENT_OPTIMIZER]
-
-    def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[str],
+    def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[float] = None,
                  kwargs: dict = None):
         super().__init__()
         self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, self.valid_optimizer_types)
@@ -370,7 +374,7 @@ class OptimizerBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        strategy: OptimizerStrategy = optimizerStrategyFactory.get_strategy(neural_net,
+        strategy: OptimizerStrategy = OptimizerStrategyFactory.get_strategy(neural_net,
                                                                             self.optimizer_type(),
                                                                             self.learning_rate(),
                                                                             self.gradient_clipping(),
