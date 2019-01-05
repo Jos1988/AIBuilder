@@ -217,6 +217,7 @@ class AndScrubber(Scrubber):
     def scrub(self, data_model: DataModel) -> DataModel:
         for scrubber in self.scrubber_list:
             scrubber.validate(data_model)
+            scrubber.update_metadata(meta_data=data_model.metadata)
             scrubber.scrub(data_model)
 
         return data_model
@@ -250,10 +251,11 @@ class OutlierScrubber(Scrubber):
         if isinstance(self.col_z, NullSpecification):
             return
 
-        num_columns = data_model.metadata.numerical_columns
         for column, z in self.col_z().items():
-            assert column in num_columns, '{} column passed to outlier scrubber not found in data numerical columns' \
-                                          ' ({})'.format(column, data_model.metadata.__repr__())
+            print(data_model.metadata)
+            column_data_type = data_model.metadata.get_column_type(column=column)
+            assert MetaData.NUMERICAL_DATA_TYPE == column_data_type, \
+                '{} column passed to outlier scrubber not numerical but {}.'.format(column, column_data_type)
 
     def update_metadata(self, meta_data: MetaData):
         pass
@@ -302,12 +304,22 @@ class MakeCategoricalScrubber(Scrubber):
 
 
 class MultipleCatToListScrubber(Scrubber):
+    """ Turns MULTIPLE_CAT_COLUMNS data columns from string to list.
+
+        before {'column': 'cat1, cat2, cat3', 'cat1, cat2, cat4'}
+        after {'column': ['cat1', 'cat2', 'cat3'], ['cat1', 'cat2', 'cat4']}
+
+    """
 
     @property
     def scrubber_config_list(self):
         return {}
 
     def __init__(self, sepperator: str):
+        """
+
+        :param sepperator:  Sub string that separates categories in data.
+        """
         self.sepperator = sepperator
 
     def validate(self, data_model: DataModel):
@@ -326,8 +338,21 @@ class MultipleCatToListScrubber(Scrubber):
 
 
 class MultipleCatListToMultipleHotScrubber(Scrubber):
+    """ Turns multiple cat list to multiple hot in df.
+
+        before {'column': ['cat1', 'cat2', 'cat3'], ['cat1', 'cat2', 'cat4']}
+        after  {'column_cat1': [1, 1]
+                'column_cat2': [1, 1]
+                'column_cat3': [1, 0]
+                'column_cat4': [0, 1]}
+    """
 
     def __init__(self, col_name: str, exclusion_list: List[str] = None):
+        """
+
+        :param col_name:        column name (must be MULTIPLE_CAT_DATA_TYPE) and will be transformed into MULTIPLE_HOT_DATA_TYPE)
+        :param exclusion_list:  categories to exclude
+        """
         self.col_name = DataTypeSpecification('col_name', col_name, str)
         self.exclusion_list = NullSpecification('exclusion_service')
         if exclusion_list is not None:
@@ -339,11 +364,13 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
     def validate(self, data_model: DataModel):
         assert self.col_name() in data_model.get_dataframe()
-        assert MetaData.MULTIPLE_CAT_DATA_TYPE == data_model.metadata.get_column_type(self.col_name())
+        column_type = data_model.metadata.get_column_type(self.col_name())
+        assert MetaData.MULTIPLE_CAT_DATA_TYPE == column_type, 'found that columns {} is type {} instead of multiple_' \
+                                                               'cat.'.format(self.col_name(), column_type)
 
     def update_metadata(self, meta_data: MetaData):
         meta_data.remove_column(self.col_name())
-        meta_data.add_column_to_type(self.col_name(), MetaData.MULTIPLE_HOT_DATA_TYPE)
+        meta_data.add_column_to_type(column_name=self.col_name(), column_type=MetaData.MULTIPLE_HOT_DATA_TYPE)
 
     def scrub(self, data_model: DataModel) -> DataModel:
         inputColumn = self.get_input_column(data_model)

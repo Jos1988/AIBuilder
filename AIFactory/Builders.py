@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
@@ -420,11 +421,11 @@ class ScrubAdapter(Builder):
         validation_data = neural_net.evaluation_data
 
         if training_data is not None:
-            self.and_scrubber.validate_metadata(training_data.metadata)
+            self.and_scrubber.validate_metadata(deepcopy(training_data.metadata))
             self.and_scrubber.scrub(training_data)
 
         if validation_data is not None:
-            self.and_scrubber.validate_metadata(validation_data.metadata)
+            self.and_scrubber.validate_metadata(deepcopy(validation_data.metadata))
             self.and_scrubber.scrub(validation_data)
 
 
