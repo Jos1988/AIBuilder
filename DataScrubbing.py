@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Union
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
+from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
 from AIBuilder.Data import DataModel, MetaData
 from currency_converter import CurrencyConverter
@@ -195,6 +196,8 @@ class AndScrubber(Scrubber):
         return {}
 
     def __init__(self, *scrubbers: Scrubber):
+        # todo: replace this with event dispatching system for dispatching console messages etc.
+        self.console_printer = FactoryPrinter(ConsolePrintStrategy())
         self.scrubber_list = []
         for scrubber in scrubbers:
             self.add_scrubber(scrubber)
@@ -218,6 +221,7 @@ class AndScrubber(Scrubber):
         for scrubber in self.scrubber_list:
             scrubber.validate(data_model)
             scrubber.update_metadata(meta_data=data_model.metadata)
+            self.console_printer.line('  - Scrubbing: ' + scrubber.__class__.__name__)
             scrubber.scrub(data_model)
 
         return data_model

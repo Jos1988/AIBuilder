@@ -122,8 +122,8 @@ class AIFactory:
     builder_permutations: List[List[Builder]]
 
     def __init__(self, builders: List[Builder],  project_name: str, log_dir: str):
-        console_strategy = ConsolePrintStrategy()
-        self.console_printer = FactoryPrinter(console_strategy)
+        # todo: replace this with event dispatching system for dispatching console messages etc.
+        self.console_printer = FactoryPrinter(ConsolePrintStrategy())
         self.sorter = BuilderSorter()
         self.project_name = project_name
         self.log_dir = log_dir
@@ -149,6 +149,7 @@ class AIFactory:
 
         ai_description = {}
         for builder in builders_sorted:
+            self.console_printer.line('running: ' + builder.__class__.__name__)
             builder.build(artificial_intelligence)
 
             builder_description = builder.describe()
