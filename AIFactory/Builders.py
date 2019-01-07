@@ -140,8 +140,9 @@ class DataSplitterBuilder(Builder):
     @property
     def dependent_on(self) -> list:
         return [
-            self.DATA_MODEL,  # need data to plit
-        ]
+            self.DATA_MODEL,    # Need data to split
+            self.SCRUBBER,      # Scrub data as one data set because m_hot column scrubber adds new columns based on
+        ]                       # data in the current set.
 
     @property
     def builder_type(self) -> str:
