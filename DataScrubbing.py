@@ -417,6 +417,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
         for binary_column_name, binary_data in m_hot_data.items():
             if self.meets_inclusion_threshold(binary_data, nominal_threshold, data_length):
+                data_model.add_feature_column(new_feature_column_name=binary_column_name)
                 df[binary_column_name] = binary_data
 
         data_model.set_dataframe(df)

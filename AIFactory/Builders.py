@@ -539,7 +539,8 @@ class FeatureColumnBuilder(Builder):
         data.set_tf_feature_columns(feature_columns)
 
         names = [column['name'] for column in self.feature_columns()]
-        data.set_feature_columns(names)
+        for name in names:
+            data.add_feature_column(name)
 
     def validate_target_not_in_features(self, data: DataModel):
         target_column = data.target_column_name
