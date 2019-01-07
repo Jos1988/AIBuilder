@@ -217,9 +217,9 @@ class EstimatorBuilder(Builder):
 
 class InputFunctionBuilder(Builder):
     BASE_FN = 'base_fn'
-    NUMPY_FN = 'numpy_fn'
+    PANDAS_FN = 'pandas_fn'
 
-    VALID_FN_NAMES = [BASE_FN, NUMPY_FN]
+    VALID_FN_NAMES = [BASE_FN, PANDAS_FN]
 
     def __init__(self, train_fn: str, train_kwargs: dict, evaluation_fn: str, evaluation_kwargs: dict):
         super().__init__()
@@ -243,16 +243,13 @@ class InputFunctionBuilder(Builder):
         if hasattr(self.fn_holder, fn_name):
             return self.load_from_holder(data_model, fn_name, kwargs)
 
-        if fn_name == self.NUMPY_FN:
-            feature_columns = data_model.get_feature_columns()
-            target_column = data_model.get_target_column()
+        if fn_name == self.PANDAS_FN:
+            kwargs['x'] = data_model.get_feature_columns()
+            kwargs['y'] = data_model.get_target_column()
 
-            feature_columns = np.array(feature_columns.to_dict())
-            labels = np.array(target_column.to_dict())
-            kwargs['x'] = feature_columns
-            kwargs['y'] = labels
+            fn = getattr(tf.estimator.inputs, 'pandas_input_fn')
 
-            return lambda: tf.estimator.inputs.numpy_input_fn(**kwargs)
+            return fn(**kwargs)
 
     def load_from_holder(self, data_model: DataModel, fn_name: str, kwargs: dict):
         assert hasattr(self.fn_holder, fn_name), 'Function {} not known in function holder.'.format(fn_name)
@@ -266,9 +263,6 @@ class InputFunctionBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        # self.train_kwargs.value['data_model'] = neural_net.training_data
-        # self.evaluation_kwargs.value['data_model'] = neural_net.evaluation_data
-
         train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs())
         evaluation_function = self.assign_fn(neural_net.evaluation_data, self.evaluation_fn_name(),
                                              self.evaluation_kwargs())

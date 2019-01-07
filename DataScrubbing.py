@@ -365,8 +365,6 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
         if inclusion_threshold is not None:
             self.inclusion_threshold = DataTypeSpecification('inclusion_threshold', inclusion_threshold, float)
 
-        print(self.inclusion_threshold)
-
     @property
     def scrubber_config_list(self):
         return {self.col_name(): MetaData.MULTIPLE_CAT_DATA_TYPE}
@@ -438,6 +436,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
         for item_categories in data:
             for category in categories:
                 occurrences = list(item_categories).count(category)
+                # todo centralize column name rendering and make sure it matches regex: https://regex101.com/r/7yYIde/1
                 binary_column_name = self.col_name() + '_' + category
                 if occurrences > 0:
                     m_hot_data[binary_column_name].append(1)
