@@ -134,29 +134,51 @@ class TestEstimatorBuilder(unittest.TestCase):
 class TestInputFnBuilder(unittest.TestCase):
 
     def setUp(self):
+        data_array = {'feat_A': [1, 2, 3], 'feat_B': [8, 6, 4], 'target': [9, 8, 7]}
+        df2 = df = pd.DataFrame(data_array)
+
+        train_model = DataModel(df)
+        train_model.set_target_column('target')
+        train_model.set_feature_columns(['feat_A', 'feat_B'])
+
+        eval_model = DataModel(df2)
+        eval_model.set_target_column('target')
+        eval_model.set_feature_columns(['feat_A', 'feat_B'])
+
+        self.arti = AI('test', 'test/test')
+        self.arti.training_data = train_model
+        self.arti.evaluation_data = eval_model
+
+    def set_base_fn(self):
         self.input_fn_builder = InputFunctionBuilder(train_fn=InputFunctionBuilder.BASE_FN,
                                                      train_kwargs={'batch_size': 100, 'epoch': 1},
                                                      evaluation_fn=InputFunctionBuilder.BASE_FN,
                                                      evaluation_kwargs={'batch_size': 100, 'epoch': 1})
 
-    def test_validate(self):
+    def test_validate_base(self):
+        self.set_base_fn()
         self.input_fn_builder.validate()
 
-    def test_build(self):
-        train_data = mock.Mock()
-        eval_data = mock.Mock()
+    def test_build_base(self):
+        self.set_base_fn()
+        self.input_fn_builder.build(self.arti)
 
-        arti = mock.Mock()
-        arti.training_data = train_data
-        arti.evaluation_data = eval_data
+        self.assertEqual(self.arti.training_fn.__name__, '<lambda>')
 
-        arti.set_training_fn = mock.Mock()
-        arti.set_evaluation_fn = mock.Mock()
+    def set_pandas_fn(self):
+        self.input_fn_builder = InputFunctionBuilder(train_fn=InputFunctionBuilder.PANDAS_FN,
+                                                     train_kwargs={'num_epochs': 1, 'shuffle': True},
+                                                     evaluation_fn=InputFunctionBuilder.PANDAS_FN,
+                                                     evaluation_kwargs={'num_epochs': 1, 'shuffle': False})
 
-        self.input_fn_builder.build(arti)
+    def test_validate_pandas(self):
+        self.set_pandas_fn()
+        self.input_fn_builder.validate()
 
-        arti.set_training_fn.assert_called_once()
-        arti.set_evaluation_fn.assert_called_once()
+    def test_build_pandas(self):
+        self.set_pandas_fn()
+        self.input_fn_builder.build(self.arti)
+        self.assertEqual(self.arti.training_fn.__name__, 'input_fn')
 
 
 class TestNamingScheme(unittest.TestCase):
