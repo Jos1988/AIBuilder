@@ -331,11 +331,25 @@ class MultipleCatToListScrubber(Scrubber):
     def update_metadata(self, meta_data: MetaData):
         pass
 
+    @staticmethod
+    def process(data):
+        new_data = []
+        for row in data:
+            new_row = []
+            for cat in row:
+                cat = cat.replace(' ', '_')
+                cat = cat.replace("'", '')
+                new_row.append(cat)
+            new_data.append(new_row)
+
+        return new_data
+
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
         metaData = data_model.metadata
         for column in metaData.multiple_cat_columns:
             df[column] = df[column].str.split(self.sepperator)
+            df[column] = self.process(df[column])
 
         return data_model.set_dataframe(df)
 
@@ -437,7 +451,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
             for category in categories:
                 occurrences = list(item_categories).count(category)
                 # todo centralize column name rendering and make sure it matches regex: https://regex101.com/r/7yYIde/1
-                binary_column_name = self.col_name() + '_' + category
+                binary_column_name = self.get_binary_cat_name(category)
                 if occurrences > 0:
                     m_hot_data[binary_column_name].append(1)
                     continue
@@ -446,10 +460,17 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
         return m_hot_data
 
+    def get_binary_cat_name(self, category) -> str:
+        bin_cat = self.col_name() + '_' + category
+        bin_cat = bin_cat.replace(' ', '_')
+        bin_cat = bin_cat.replace("'", '')
+
+        return bin_cat
+
     def get_new_data_set(self, categories: list):
         m_hot_data = {}
         for cat in categories:
-            binary_cat_name = self.col_name() + '_' + cat
+            binary_cat_name = self.get_binary_cat_name(cat)
             m_hot_data[binary_cat_name] = []
 
         return m_hot_data
