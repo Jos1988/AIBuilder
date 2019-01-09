@@ -140,9 +140,9 @@ class DataSplitterBuilder(Builder):
     @property
     def dependent_on(self) -> list:
         return [
-            self.DATA_MODEL,    # Need data to split
-            self.SCRUBBER,      # Scrub data as one data set because m_hot column scrubber adds new columns based on
-        ]                       # data in the current set.
+            self.DATA_MODEL,  # Need data to split
+            self.SCRUBBER,  # Scrub data as one data set because m_hot column scrubber adds new columns based on
+        ]  # data in the current set.
 
     @property
     def builder_type(self) -> str:
@@ -233,7 +233,11 @@ class InputFunctionBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.DATA_SPLITTER, self.SCRUBBER]
+        return [self.DATA_SPLITTER,  # Need both validation and training data separated for respective input fns.
+                self.SCRUBBER,  # Pass clean data to input fns.
+                self.FEATURE_COLUMN  # Feature column builder als add feature cols to data_models,
+                #  which are required to for passing feature data to fn.
+                ]
 
     @property
     def builder_type(self) -> str:
