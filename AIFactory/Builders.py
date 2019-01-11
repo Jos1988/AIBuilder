@@ -250,6 +250,7 @@ class InputFunctionBuilder(Builder):
         if fn_name == self.PANDAS_FN:
             kwargs['x'] = data_model.get_feature_columns()
             kwargs['y'] = data_model.get_target_column()
+            kwargs['target_column'] = data_model.target_column_name
 
             fn = getattr(tf.estimator.inputs, 'pandas_input_fn')
 
@@ -530,15 +531,31 @@ class FeatureColumnBuilder(Builder):
             self.build_feature_columns(evaluation_data)
             ai.set_evaluation_data(evaluation_data)
 
-    def build_feature_columns(self, data):
-        self.validate_target_not_in_features(data)
+    def build_feature_columns(self, data_model):
+        self.validate_target_not_in_features(data_model)
 
-        feature_columns = self.render_tf_feature_columns(data_model=data)
-        data.set_tf_feature_columns(feature_columns)
+        feature_columns = self.render_tf_feature_columns(data_model=data_model)
+        data_model.set_tf_feature_columns(feature_columns)
 
-        names = [column['name'] for column in self.feature_columns()]
-        for name in names:
-            data.add_feature_column(name)
+        self.add_feature_col_names_to_data_model(data_model)
+
+    def add_feature_col_names_to_data_model(self, data_model):
+        for column_data in self.feature_columns():
+
+            if column_data['type'] is FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS:
+                self.load_bin_column_names(column_data['name'], data_model)
+
+                continue
+
+            data_model.add_feature_column(column_data['name'])
+
+    @staticmethod
+    def load_bin_column_names(column_name: str, data_model):
+        binary_column_prefix = column_name + '_'
+        # prefix convention implemented in 'MultipleCatListToMultipleHotScrubber'.
+        for column in data_model.get_dataframe().columns:
+            if binary_column_prefix in column:
+                data_model.add_feature_column(column)
 
     def validate_target_not_in_features(self, data: DataModel):
         target_column = data.target_column_name

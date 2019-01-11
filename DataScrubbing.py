@@ -284,6 +284,7 @@ class OutlierScrubber(Scrubber):
         return df
 
 
+# tensor flow estimator cannot handle categorical dtypes.
 class MakeCategoricalScrubber(Scrubber):
     @property
     def scrubber_config_list(self):
@@ -429,7 +430,6 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
         for binary_column_name, binary_data in m_hot_data.items():
             if self.meets_inclusion_threshold(binary_data, nominal_threshold, data_length):
-                data_model.add_feature_column(new_feature_column_name=binary_column_name)
                 df[binary_column_name] = binary_data
 
         data_model.set_dataframe(df)
@@ -449,9 +449,8 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
         data = input_column.to_dict().values()
         for item_categories in data:
             for category in categories:
-                occurrences = list(item_categories).count(category)
-                # todo centralize column name rendering and make sure it matches regex: https://regex101.com/r/7yYIde/1
-                binary_column_name = self.get_binary_cat_name(category)
+                occurrences = list(item_categories).count(category) #maybe just check if category us present
+                binary_column_name = category
                 if occurrences > 0:
                     m_hot_data[binary_column_name].append(1)
                     continue
@@ -470,7 +469,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
     def get_new_data_set(self, categories: list):
         m_hot_data = {}
         for cat in categories:
-            binary_cat_name = self.get_binary_cat_name(cat)
+            binary_cat_name = cat
             m_hot_data[binary_cat_name] = []
 
         return m_hot_data
