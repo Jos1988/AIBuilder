@@ -96,6 +96,26 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
 
 class MultipleHotFeatureStrategy(FeatureColumnStrategy):
+    """ This strategy adds a categorical feature column for every category found in the data column.
+
+    The categorical features have two categories 0 and 1 and are named after their respected catogry prefixed with
+    the name of the original column.
+
+    example:
+     input:
+        pets: ['cat', 'dog', 'bird'], ['cat', 'dog'], ['cat']
+        pets_cat: [1,1,1]
+        pets_dog: [1,1,0]
+        pets_bird: [1,0,0]
+
+     adds:
+        pets_cat: 'categorical_column_with_identity'
+        pets_dog: 'categorical_column_with_identity'
+        pets_bird: 'categorical_column_with_identity'
+
+    note: The data in 'pets' can be scrubbed by the 'MultipleCatListToMultipleHotScrubber' to create the required
+    data structure.
+    """
 
     def build_column(self) -> list:
         df = self.data_model.get_dataframe()
