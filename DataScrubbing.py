@@ -363,6 +363,8 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
                 'column_cat2': [1, 1]
                 'column_cat3': [1, 0]
                 'column_cat4': [0, 1]}
+
+        note: Use the 'MultipleCatToListScrubber' to create the lists in the input column.
     """
 
     def __init__(self, col_name: str, exclusion_list: List[str] = None, inclusion_threshold: float = None):
@@ -373,6 +375,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
         """
         self.col_name = DataTypeSpecification('col_name', col_name, str)
         self.exclusion_list = NullSpecification('exclusion_service')
+        self.bin_cat_map = {}  # keeps track of {category: binary category name}.
         if exclusion_list is not None:
             self.exclusion_list = DataTypeSpecification('exclusion_list', exclusion_list, list)
 
@@ -445,12 +448,21 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
         return categories
 
+    def get_new_data_set(self, categories: list):
+        m_hot_data = {}
+        for cat in categories:
+            binary_cat_name = self.get_binary_cat_name(cat)
+            self.bin_cat_map[cat] = binary_cat_name
+            m_hot_data[binary_cat_name] = []
+
+        return m_hot_data
+
     def fill_new_data_set(self, categories: List[str], input_column: pd.Series, m_hot_data: dict):
         data = input_column.to_dict().values()
         for item_categories in data:
             for category in categories:
-                occurrences = list(item_categories).count(category) #maybe just check if category us present
-                binary_column_name = category
+                occurrences = list(item_categories).count(category)  # maybe just check if category is present
+                binary_column_name = self.bin_cat_map[category]
                 if occurrences > 0:
                     m_hot_data[binary_column_name].append(1)
                     continue
@@ -459,20 +471,12 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
         return m_hot_data
 
-    def get_binary_cat_name(self, category) -> str:
-        bin_cat = self.col_name() + '_' + category
-        bin_cat = bin_cat.replace(' ', '_')
-        bin_cat = bin_cat.replace("'", '')
+    def get_binary_cat_name(self, category_name: str) -> str:
+        bin_cat_name = self.col_name() + '_' + category_name
+        bin_cat_name = bin_cat_name.replace(' ', '_')
+        bin_cat_name = bin_cat_name.replace("'", '')
 
-        return bin_cat
-
-    def get_new_data_set(self, categories: list):
-        m_hot_data = {}
-        for cat in categories:
-            binary_cat_name = cat
-            m_hot_data[binary_cat_name] = []
-
-        return m_hot_data
+        return bin_cat_name
 
     @staticmethod
     def meets_inclusion_threshold(binary_data: list, min_threshold: Union[None, int], data_length: int):
