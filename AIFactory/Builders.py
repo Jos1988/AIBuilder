@@ -224,9 +224,13 @@ class InputFunctionBuilder(Builder):
     def __init__(self, train_fn: str, train_kwargs: dict, evaluation_fn: str, evaluation_kwargs: dict):
         super().__init__()
         self.train_fn_name = TypeSpecification('test_dir function', train_fn, self.VALID_FN_NAMES)
+
+        # todo: do not print training kwargs, when saving description, some of them are objects,
+        #  for example x and y are dataframes.
         self.train_kwargs = DataTypeSpecification('train_kwargs', train_kwargs, dict)
 
         self.evaluation_fn_name = TypeSpecification('evaluation function', evaluation_fn, self.VALID_FN_NAMES)
+        #todo: idem.
         self.evaluation_kwargs = DataTypeSpecification('evaluation_kwargs', evaluation_kwargs, dict)
 
         self.fn_holder = InputFunctionHolder

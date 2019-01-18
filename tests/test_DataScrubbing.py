@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
-    MultipleCatListToMultipleHotScrubber
+    MultipleCatListToMultipleHotScrubber, BlackListScrubber
 
 
 class TestMissingDataScrubber(unittest.TestCase):
@@ -233,6 +233,52 @@ class TestAndScrubber(unittest.TestCase):
         self.assertEqual(0.0, result[0])
         self.assertEqual(2.0, result[1])
         self.assertEqual(105, round(result[2]))
+
+
+class TestBlackListScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'categorical': ['cat', 'dog', 'cat', 'cat', 'dog', 'bird', 'cat', 'cat', 'dog', 'bird', 'cat', 'dog'],
+            'column': [12, 45, 23, 78, 4, 34, 1, 3, 89, 0, 1, 56],
+        }
+
+        metadata = MetaData()
+        metadata.define_categorical_columns(['categorical'])
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testValidateInvalid(self):
+        scrubber = BlackListScrubber(column_name='invalid', black_list=['bird'])
+        with self.assertRaises(AssertionError):
+            scrubber.validate(self.data_model)
+
+    def testValidateInvalid2(self):
+        scrubber = BlackListScrubber(column_name='column', black_list=['bird'])
+        with self.assertRaises(AssertionError):
+            scrubber.validate(self.data_model)
+
+    def testValidateValid(self):
+        scrubber = BlackListScrubber(column_name='categorical', black_list=['cat', 'bird'])
+        scrubber.validate(self.data_model)
+
+    def testScrub(self):
+        scrubber = BlackListScrubber(column_name='categorical', black_list=['bird'])
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        categories = df['categorical'].values.tolist()
+        self.assertEqual(10, len(df))
+        self.assertNotIn('bird', categories)
+
+    def testScrub2(self):
+        scrubber = BlackListScrubber(column_name='categorical', black_list=['dog', 'bird'])
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        categories = df['categorical'].values.tolist()
+        self.assertEqual(6, len(df))
+        self.assertNotIn('bird', categories)
+        self.assertNotIn('dog', categories)
 
 
 class TestOutlierScrubbing(unittest.TestCase):

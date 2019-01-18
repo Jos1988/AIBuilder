@@ -10,6 +10,8 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 
+from AIBuilder.Summizer import TimeSummizer
+
 
 class Scrubber(ABC):
 
@@ -227,6 +229,37 @@ class AndScrubber(Scrubber):
         return data_model
 
 
+class BlackListScrubber(Scrubber):
+
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def __init__(self, column_name: str, black_list: List[str]):
+        self.black_list = DataTypeSpecification('black_list', black_list, List[str])
+        self.column_name = DataTypeSpecification('column_name', column_name, str)
+
+    def validate(self, data_model: DataModel):
+        df = data_model.get_dataframe()
+
+        assert MetaData.CATEGORICAL_DATA_TYPE == data_model.metadata.get_column_type(
+            self.column_name()), 'Column {} is not a categorical column.'.format(self.column_name())
+
+        assert self.column_name() in df.columns, 'column name {} not in de dataframe'.format(self.column_name())
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        df = df.set_index(self.column_name())
+        df = df.drop(self.black_list(), axis=0)
+        df = df.reset_index()
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
 class OutlierScrubber(Scrubber):
 
     @property
@@ -373,6 +406,8 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
         :param col_name:        column name (must be MULTIPLE_CAT_DATA_TYPE) and will be transformed into MULTIPLE_HOT_DATA_TYPE)
         :param exclusion_list:  categories to exclude
         """
+        # todo: replace this with event dispatching system for dispatching console messages etc.
+        self.time_summizer = TimeSummizer()
         self.col_name = DataTypeSpecification('col_name', col_name, str)
         self.exclusion_list = NullSpecification('exclusion_service')
         self.bin_cat_map = {}  # keeps track of {category: binary category name}.
@@ -399,11 +434,15 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
     def scrub(self, data_model: DataModel) -> DataModel:
         inputColumn = self.get_input_column(data_model)
-
         categories = self.get_categories(data_model)
         m_hot_data = self.get_new_data_set(categories)
-        m_hot_data = self.fill_new_data_set(categories, inputColumn, m_hot_data)
 
+        # todo takes very long time! 30+ sec!
+        self.time_summizer.start_time_log()
+        m_hot_data = self.fill_new_data_set(categories, inputColumn, m_hot_data)
+        self.time_summizer.log('filled dataset', None)
+        self.time_summizer.summize(ConsolePrintStrategy())
+        self.time_summizer.reset()
         data_model = self.add_binary_data_to_model(data_model, m_hot_data)
         data_model = self.update_metadata_on_scrub(data_model, m_hot_data)
 
