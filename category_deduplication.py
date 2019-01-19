@@ -1,8 +1,9 @@
+import json
 from difflib import SequenceMatcher
 from typing import List, Optional
 
 
-class SetMerger:
+class DuplicationGroupMerger:
 
     def __init__(self):
         self.sets_to_merge = []
@@ -91,7 +92,7 @@ class StringDeduplicator:
         self.duplicate_groups = []
         self.alias_list = {}  # dict for converging values, example: {'cat': 'Cat2', 'cat': 'Cat'}
 
-        self.set_merger = SetMerger()
+        self.set_merger = DuplicationGroupMerger()
         self.alias_list_builder = AliasListBuilder()
 
     def deduplicate(self):
@@ -193,9 +194,25 @@ class StringDeduplicator:
                 self.duplicate_groups.append(duplicate_group)
                 return
 
-# save alias dict as file.
 
-# load alias list from file.
+class AliasListStorageMover:
+
+    @staticmethod
+    def move_to_storage(alias_list: dict, file_name: str):
+        json_list = json.dumps(alias_list)
+        file = open(file=file_name, mode='x')
+        file.write(json_list)
+        file.close()
+
+    @staticmethod
+    def get_from_storage(file_name: str) -> None:
+        file = open(file=file_name, mode='r')
+        json_data = file.read()
+        file.close()
+        dict_data = json.loads(json_data)
+
+        return dict_data
+
 
 # scrub categorical column using alias dict.
 
