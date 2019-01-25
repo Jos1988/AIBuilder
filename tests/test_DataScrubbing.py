@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
-    MultipleCatListToMultipleHotScrubber, BlackListScrubber
+    MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber
 
 
 class TestMissingDataScrubber(unittest.TestCase):
@@ -452,6 +452,74 @@ class TestMultipleCatListToMultipleHot(unittest.TestCase):
         self.assertIn('list_1_USD', columns)
         self.assertIn('list_1_JPY', columns)
         self.assertIn('list_1_AUD', columns)
+
+
+class TestConvertToColumn(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'num_1': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'num_2': [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        }
+        metadata = MetaData()
+        metadata.define_numerical_columns(['num_1', 'num_2'])
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testScrubbing(self):
+        def convert(row):
+            return row['num_1'] + row['num_2']
+
+        scrubber = ConvertToColumnScrubber(new_column_name='num_3', converter=convert,
+                                           new_column_type=MetaData.NUMERICAL_DATA_TYPE,
+                                           required_columns={'num_1': MetaData.NUMERICAL_DATA_TYPE,
+                                                             'num_2': MetaData.NUMERICAL_DATA_TYPE})
+        scrubber.validate(self.data_model)
+        result = scrubber.scrub(self.data_model)
+        result_df = result.get_dataframe()
+
+        for row in result_df.values:
+            self.assertEqual(row[2], row[0] + 1)
+
+    def testInvalid(self):
+        def convert(row):
+            return row['num_1'] + row['num_2']
+
+        scrubber = ConvertToColumnScrubber(new_column_name='num_3', converter=convert,
+                                           new_column_type=MetaData.NUMERICAL_DATA_TYPE,
+                                           required_columns={'num_1': MetaData.NUMERICAL_DATA_TYPE,
+                                                             'num_4': MetaData.NUMERICAL_DATA_TYPE})
+
+        with self.assertRaises(AssertionError):
+            scrubber.validate(self.data_model)
+
+
+class TestCategoryToFloatScrubber(unittest.TestCase):
+    def setUp(self):
+        data = {
+            'cat_1': ['one', 'two', 'three', 'two', 'one'],
+        }
+
+        metadata = MetaData()
+        metadata.define_categorical_columns(['cat_1'])
+
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testScrubbing(self):
+        cat_to_value_index = {'one': 1, 'two': 2, 'three': 3}
+        scrubber = CategoryToFloatScrubber(new_column_name='num_1',
+                                           source_column_name='cat_1',
+                                           category_to_value_index=cat_to_value_index)
+
+        scrubber.validate(self.data_model)
+        result = scrubber.scrub(self.data_model)
+        result_df = result.get_dataframe()
+
+        for result in result_df.values:
+            self.assertEqual(result[1], cat_to_value_index[result[0]])
 
 
 if __name__ == '__main__':

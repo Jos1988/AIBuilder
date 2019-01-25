@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Union
+from typing import List, Union, Optional
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
@@ -18,10 +18,16 @@ class Scrubber(ABC):
     @property
     @abstractmethod
     def scrubber_config_list(self):
+        """Returns dict of columns names with required types.
+
+        example of output: {'value': 'numerical', 'type': 'categorical'}
+        """
+
         pass
 
     @abstractmethod
     def validate(self, data_model: DataModel):
+        """Validate data model before scrubbing."""
         pass
 
     def validate_metadata(self, meta_data: MetaData):
@@ -29,6 +35,7 @@ class Scrubber(ABC):
 
     @abstractmethod
     def update_metadata(self, meta_data: MetaData):
+        """Update data models meta data to emulate scrubbing data modifications."""
         pass
 
     @abstractmethod
@@ -529,3 +536,55 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
             return True
 
         return False
+
+
+class ConvertToColumnScrubber(Scrubber):
+    """Create a new column based and fill have it filled by callable.
+    """
+
+    def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict):
+        self.new_column_type = new_column_type
+        self.required_columns = required_columns
+        self.converter = converter
+        self.new_column_name = new_column_name
+
+    @property
+    def scrubber_config_list(self):
+        if None is not self.required_columns:
+            return self.required_columns
+
+        return {}
+
+    def validate(self, data_model: DataModel):
+        for column, data_type in self.required_columns.items():
+            assert column in data_model.get_dataframe()
+            assert data_type is data_model.metadata.get_column_type(column), \
+                'failed asserting that column: {} is of type: {} from metadata'.format(column, data_type)
+
+    def update_metadata(self, meta_data: MetaData):
+        meta_data.add_column_to_type(column_name=self.new_column_name, column_type=self.new_column_type)
+
+        return meta_data
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        df[self.new_column_name] = df.apply(self.converter, axis=1)
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class CategoryToFloatScrubber(ConvertToColumnScrubber):
+    """Add a column with a float value based on categorical column"""
+
+    def __init__(self, new_column_name: str, source_column_name: str, category_to_value_index: dict):
+        required_columns = {source_column_name: MetaData.CATEGORICAL_DATA_TYPE}
+
+        def convert(row):
+            cat = row[source_column_name]
+            return category_to_value_index[cat]
+
+        super().__init__(new_column_name=new_column_name,
+                         new_column_type=MetaData.NUMERICAL_DATA_TYPE,
+                         converter=convert,
+                         required_columns=required_columns)
