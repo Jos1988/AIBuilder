@@ -4,7 +4,8 @@ import pandas as pd
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
-    MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber
+    MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
+    KeyWordToCategoryScrubber
 
 
 class TestMissingDataScrubber(unittest.TestCase):
@@ -520,6 +521,49 @@ class TestCategoryToFloatScrubber(unittest.TestCase):
 
         for result in result_df.values:
             self.assertEqual(result[1], cat_to_value_index[result[0]])
+
+
+class TestKeyWordToCategoryScrubber(unittest.TestCase):
+    def setUp(self):
+        data = {
+            'text_1': ['i am one', 'i am I', 'we are two', 'the three of us', 'two become one', 'we are legion',
+                       '2 become 1'],
+        }
+
+        metadata = MetaData()
+        metadata.define_text_columns(['text_1'])
+
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testScrubbing(self):
+        scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
+                                             source_column_name='text_1',
+                                             keywords=['one', 'two', 'three'],
+                                             unknown_category='unknown')
+
+        scrubber.validate(self.data_model)
+        result = scrubber.scrub(self.data_model)
+        result_df = result.get_dataframe()
+
+        self.assertEqual(result_df['cat_1'].values.tolist(),
+                         ['one', 'unknown', 'two', 'three', 'two', 'unknown', 'unknown'])
+
+    def testScrubbingWithAliases(self):
+        scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
+                                             source_column_name='text_1',
+                                             keywords=['one', 'two', 'three'],
+                                             unknown_category='unknown',
+                                             use_synonyms=True,
+                                             min_syntactic_distance=0.01,
+                                             verbose=True)
+
+        scrubber.validate(self.data_model)
+        result = scrubber.scrub(self.data_model)
+        result_df = result.get_dataframe()
+
+        self.assertEqual(result_df['cat_1'].values.tolist(), ['one', 'one', 'two', 'three', 'one', 'unknown', 'one'])
 
 
 if __name__ == '__main__':

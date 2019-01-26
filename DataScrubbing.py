@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Union, Optional
+
+from nltk.corpus import wordnet
+
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
@@ -578,8 +581,6 @@ class CategoryToFloatScrubber(ConvertToColumnScrubber):
     """Add a column with a float value based on categorical column"""
 
     def __init__(self, new_column_name: str, source_column_name: str, category_to_value_index: dict):
-        required_columns = {source_column_name: MetaData.CATEGORICAL_DATA_TYPE}
-
         def convert(row):
             cat = row[source_column_name]
             return category_to_value_index[cat]
@@ -587,4 +588,92 @@ class CategoryToFloatScrubber(ConvertToColumnScrubber):
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.NUMERICAL_DATA_TYPE,
                          converter=convert,
-                         required_columns=required_columns)
+                         required_columns={source_column_name: MetaData.CATEGORICAL_DATA_TYPE})
+
+
+class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
+    """ Search for keyword in text to determine category.
+    """
+
+    # todo make this multi cat later.
+
+    def __init__(self, new_column_name: str, source_column_name: str, keywords: List[str], unknown_category: str,
+                 use_synonyms: Optional[bool] = False, min_syntactic_distance: Optional[float] = None,
+                 verbose: Optional[bool] = False):
+        """
+        :param new_column_name:
+        :param source_column_name:
+        :param keywords: list of keywords as values.
+        :param unknown_category:
+        :param use_synonyms: if True synonyms to the keywords will be used to determine category
+        :param min_syntactic_distance: minimum similarity between keyword and its synonym for the synonym to be used.
+        :param verbose: bool
+        """
+        self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', 0.0, float)
+        self.verbose = verbose
+        if min_syntactic_distance is not None:
+            self.min_syntactic_distance.value = min_syntactic_distance
+
+        self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
+
+        cat_alias = self.load_cat_aliases(keywords)
+
+        def convert(row):
+            category = unknown_category
+            stop = False
+            for cat, aliases in cat_alias.items():
+                if stop is True:
+                    break
+
+                for alias in aliases:
+                    if stop is True:
+                        break
+
+                    row_value = row[source_column_name]
+                    if alias in row_value:
+                        if self.verbose:
+                            print('value "{}", considered of cat "{}", through alias: "{}".'.format(row_value, cat,
+                                                                                                    alias))
+
+                        category = cat
+                        stop = True
+
+            return category
+
+        super().__init__(new_column_name=new_column_name,
+                         new_column_type=MetaData.CATEGORICAL_DATA_TYPE,
+                         converter=convert,
+                         required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
+
+    def load_cat_aliases(self, keywords: List[str]) -> dict:
+        cat_aliases = {}
+        for keyword in keywords:
+            cat_keywords = [keyword]
+            if self.use_synonyms():
+                synonyms = self.getSynonyms(keyword)
+                if self.verbose:
+                    print('found synonyms for "{}": "{}"'.format(keyword, synonyms))
+
+                cat_keywords = cat_keywords + synonyms
+
+            cat_aliases[keyword] = cat_keywords
+
+        return cat_aliases
+
+    def getSynonyms(self, keyword):
+        synonyms = []
+        synsets = wordnet.synsets(keyword)
+        base_synset = synsets[0]
+        for synset in synsets:
+            similarity = self.get_similarity(base_synset, synset)
+            if self.min_syntactic_distance() < similarity:
+                synonyms = synonyms + synset.lemma_names()
+
+        return synonyms
+
+    @staticmethod
+    def get_similarity(base_synset, synset):
+        similarity = base_synset.path_similarity(synset)
+        if similarity is None:
+            similarity = 0
+        return similarity

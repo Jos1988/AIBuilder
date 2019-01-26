@@ -10,6 +10,7 @@ class MetaData:
     MULTIPLE_CAT_DATA_TYPE = 'multiple_cat'
     MULTIPLE_HOT_DATA_TYPE = 'multiple_hot'
     BINARY_DATA_TYPE = 'binary'
+    TEXT_DATA_TYPE = 'text'
     UNKNOWN_DATA_TYPE = 'unknown'
 
     def __init__(self, data: pd.DataFrame = None):
@@ -23,6 +24,7 @@ class MetaData:
         self.multiple_hot_columns = list()
         self.categorical_columns = list()
         self.numerical_columns = list()
+        self.text_columns = list()
         self.binary_columns = list()
 
         self.column_collections = {self.MULTIPLE_CAT_DATA_TYPE: self.multiple_cat_columns,
@@ -30,7 +32,8 @@ class MetaData:
                                    self.CATEGORICAL_DATA_TYPE: self.categorical_columns,
                                    self.NUMERICAL_DATA_TYPE: self.numerical_columns,
                                    self.UNKNOWN_DATA_TYPE: self.uncategorized_columns,
-                                   self.BINARY_DATA_TYPE: self.binary_columns}
+                                   self.BINARY_DATA_TYPE: self.binary_columns,
+                                   self.TEXT_DATA_TYPE: self.text_columns}
 
     def __repr__(self):
         self.sort_column_lists()
@@ -41,6 +44,7 @@ class MetaData:
             'multiple_hot': self.multiple_hot_columns,
             'numerical': self.numerical_columns,
             'binary': self.binary_columns,
+            'text': self.text_columns,
             'unknown': self.uncategorized_columns
         })
 
@@ -81,6 +85,10 @@ class MetaData:
     def define_binary_columns(self, column_names: list):
         for column_name in column_names:
             self.add_column_to_type(self.BINARY_DATA_TYPE, column_name)
+
+    def define_text_columns(self, column_names: list):
+        for column_name in column_names:
+            self.add_column_to_type(self.TEXT_DATA_TYPE, column_name)
 
     def add_column_to_type(self, column_type: str, column_name: str):
         self.remove_column(column_name)
