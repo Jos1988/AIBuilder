@@ -494,15 +494,11 @@ class MetadataBuilder(Builder):
 
 
 class FeatureColumnBuilder(Builder):
-    valid_column_types = [FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
-                          FeatureColumnStrategy.NUMERICAL_COLUMN,
-                          FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
-                          FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS]
 
     def __init__(self, feature_columns: dict):
         super().__init__()
 
-        self.feature_columns = FeatureColumnsSpecification('feature_columns', [], self.valid_column_types)
+        self.feature_columns = FeatureColumnsSpecification('feature_columns', [], FeatureColumnStrategy.ALL_COLUMNS)
 
         for name, type in feature_columns.items():
             self.add_feature_column(name=name, column_type=type)

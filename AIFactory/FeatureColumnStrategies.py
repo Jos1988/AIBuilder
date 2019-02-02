@@ -11,6 +11,9 @@ class FeatureColumnStrategy(ABC):
     CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
     MULTIPLE_HOT_COLUMNS = 'multiple_hot_columns'
 
+    ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,
+                   INDICATOR_COLUMN_VOC_LIST, MULTIPLE_HOT_COLUMNS]
+
     def __init__(self, column_name: str, data_model: DataModel):
         self.data_model = data_model
         self.column_name = column_name
@@ -165,6 +168,7 @@ class MultipleHotFeatureStrategy(FeatureColumnStrategy):
 class FeatureColumnStrategyFactory:
     strategies = [
         NumericColumnStrategy,
+        CategoricalColumnWithIdentity,
         CategoricalColumnWithVOCListStrategy,
         IndicatorColumnWithVOCListStrategy,
         MultipleHotFeatureStrategy
