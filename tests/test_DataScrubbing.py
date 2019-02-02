@@ -527,7 +527,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
     def setUp(self):
         data = {
             'text_1': ['i am one', 'i am I', 'we are two', 'the three of us', 'two become one', 'we are legion',
-                       '2 become 1'],
+                       '2 become 1', 'we are foo bar'],
         }
 
         metadata = MetaData()
@@ -541,19 +541,20 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
         scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
                                              source_column_name='text_1',
                                              keywords=['one', 'two', 'three'],
-                                             unknown_category='unknown')
+                                             unknown_category='unknown',
+                                             verbose=0)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
         result_df = result.get_dataframe()
 
         self.assertEqual(result_df['cat_1'].values.tolist(),
-                         ['one', 'unknown', 'two', 'three', 'two', 'unknown', 'unknown'])
+                         ['one', 'unknown', 'two', 'three', 'one', 'unknown', 'unknown', 'unknown'])
 
     def testScrubbingWithAliases(self):
         scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
                                              source_column_name='text_1',
-                                             keywords=['one', 'two', 'three'],
+                                             keywords=['one', 'two', 'three', 'foo bar'],
                                              unknown_category='unknown',
                                              use_synonyms=True,
                                              min_syntactic_distance=0.01,
@@ -563,7 +564,9 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
         result = scrubber.scrub(self.data_model)
         result_df = result.get_dataframe()
 
-        self.assertEqual(result_df['cat_1'].values.tolist(), ['one', 'one', 'two', 'three', 'one', 'unknown', 'one'])
+        print(result_df['cat_1'].values.tolist())
+        self.assertEqual(result_df['cat_1'].values.tolist(),
+                         ['one', 'one', 'two', 'three', 'one', 'unknown', 'one', 'foo bar'])
 
 
 if __name__ == '__main__':

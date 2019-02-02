@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Union, Optional
 
-from nltk.corpus import wordnet
-
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
@@ -14,6 +12,7 @@ from scipy import stats
 import pandas as pd
 
 from AIBuilder.Summizer import TimeSummizer
+from AIBuilder.SyntacticTools import AliasLoader
 
 
 class Scrubber(ABC):
@@ -240,6 +239,8 @@ class AndScrubber(Scrubber):
 
 
 class BlackListScrubber(Scrubber):
+    """ Removes rows with blacklisted categories.
+    """
 
     @property
     def scrubber_config_list(self):
@@ -599,7 +600,7 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
 
     def __init__(self, new_column_name: str, source_column_name: str, keywords: List[str], unknown_category: str,
                  use_synonyms: Optional[bool] = False, min_syntactic_distance: Optional[float] = None,
-                 verbose: Optional[bool] = False):
+                 verbose: Optional[int] = 0):
         """
         :param new_column_name:
         :param source_column_name:
@@ -607,31 +608,31 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
         :param unknown_category:
         :param use_synonyms: if True synonyms to the keywords will be used to determine category
         :param min_syntactic_distance: minimum similarity between keyword and its synonym for the synonym to be used.
-        :param verbose: bool
+        :param verbose: bool, 0: not verbose, 1: verbose, 2: verbose
         """
+        self.verbosity = verbose
         self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', 0.0, float)
-        self.verbose = verbose
         if min_syntactic_distance is not None:
             self.min_syntactic_distance.value = min_syntactic_distance
 
         self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
 
-        cat_alias = self.load_cat_aliases(keywords)
+        alias_loader = AliasLoader(use_synonyms=self.use_synonyms(), min_syntactic_distance=self.min_syntactic_distance(),
+                                   verbosity=self.verbosity)
+
+        cat_alias = alias_loader.load_cat_aliases(keywords)
 
         def convert(row):
             category = unknown_category
             stop = False
             for cat, aliases in cat_alias.items():
-                if stop is True:
-                    break
-
                 for alias in aliases:
                     if stop is True:
                         break
 
                     row_value = row[source_column_name]
-                    if alias in row_value:
-                        if self.verbose:
+                    if alias.lower() + ' ' in row_value.lower() + ' ':
+                        if self.verbosity > 1:
                             print('value "{}", considered of cat "{}", through alias: "{}".'.format(row_value, cat,
                                                                                                     alias))
 
@@ -645,35 +646,4 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
                          converter=convert,
                          required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
 
-    def load_cat_aliases(self, keywords: List[str]) -> dict:
-        cat_aliases = {}
-        for keyword in keywords:
-            cat_keywords = [keyword]
-            if self.use_synonyms():
-                synonyms = self.getSynonyms(keyword)
-                if self.verbose:
-                    print('found synonyms for "{}": "{}"'.format(keyword, synonyms))
 
-                cat_keywords = cat_keywords + synonyms
-
-            cat_aliases[keyword] = cat_keywords
-
-        return cat_aliases
-
-    def getSynonyms(self, keyword):
-        synonyms = []
-        synsets = wordnet.synsets(keyword)
-        base_synset = synsets[0]
-        for synset in synsets:
-            similarity = self.get_similarity(base_synset, synset)
-            if self.min_syntactic_distance() < similarity:
-                synonyms = synonyms + synset.lemma_names()
-
-        return synonyms
-
-    @staticmethod
-    def get_similarity(base_synset, synset):
-        similarity = base_synset.path_similarity(synset)
-        if similarity is None:
-            similarity = 0
-        return similarity
