@@ -5,6 +5,7 @@ from AIBuilder.Data import DataModel
 
 
 class FeatureColumnStrategy(ABC):
+    CATEGORICAL_COLUMN_IDENTITY = 'categorical_column_with_identity'
     INDICATOR_COLUMN_VOC_LIST = 'indicator_column'
     NUMERICAL_COLUMN = 'numeric_column'
     CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
@@ -69,6 +70,27 @@ class CategoricalColumnWithVOCListStrategy(FeatureColumnStrategy):
     @staticmethod
     def column_types() -> list:
         return [FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST]
+
+
+class CategoricalColumnWithIdentity(FeatureColumnStrategy):
+
+    def build_column(self) -> list:
+        df = self.data_model.get_dataframe()
+        num_buckets = len(df[self.column_name].unique())
+
+        new_column = tf.feature_column.categorical_column_with_identity(
+            self.column_name,
+            num_buckets=num_buckets)
+
+        return [new_column]
+
+    def validate_result(self):
+        for result in self.results:
+            assert result.__class__.__name__ == '_IdentityCategoricalColumn'
+
+    @staticmethod
+    def column_types() -> list:
+        return [FeatureColumnStrategy.CATEGORICAL_COLUMN_IDENTITY]
 
 
 class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):

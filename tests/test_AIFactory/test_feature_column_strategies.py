@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 from AIBuilder.AIFactory.FeatureColumnStrategies import NumericColumnStrategy, FeatureColumnStrategy, \
     CategoricalColumnWithVOCListStrategy, IndicatorColumnWithVOCListStrategy, FeatureColumnStrategyFactory, \
-    MultipleHotFeatureStrategy
+    MultipleHotFeatureStrategy, CategoricalColumnWithIdentity
 from AIBuilder.Data import DataModel
 
 
@@ -63,6 +63,20 @@ class TestCategoricalColumnWithVOCListStrategy(AbstractFCStrategyTester, unittes
         self.assertListEqual(list(result.vocabulary_list), ['cat1', 'cat2'])
 
 
+class TestCategoricalColumnWithIdentityStrategy(AbstractFCStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> FeatureColumnStrategy:
+        return CategoricalColumnWithIdentity
+
+    def get_test_data(self):
+        return {'col': [1, 2, 1, 6]}
+
+    def assert_result(self, result):
+        result = result[0]
+        self.assertIsNotNone(result)
+        self.assertEqual(result.num_buckets, 3)
+
+
 class TestIndicatorColumnWithVOCListStrategy(AbstractFCStrategyTester, unittest.TestCase):
 
     def get_strategy_class_name(self) -> FeatureColumnStrategy:
@@ -100,22 +114,19 @@ class TestFeatureColumnStrategyFactory(unittest.TestCase):
         self.data_model = DataModel(self.data_frame)
 
     def test_numerical_column(self):
-        strategy = FeatureColumnStrategyFactory.get_strategy('col1',
-                                                             FeatureColumnStrategy.NUMERICAL_COLUMN,
+        strategy = FeatureColumnStrategyFactory.get_strategy('col1', FeatureColumnStrategy.NUMERICAL_COLUMN,
                                                              self.data_model)
 
         self.assertIsInstance(strategy, NumericColumnStrategy)
 
     def test_categorical_column(self):
-        strategy = FeatureColumnStrategyFactory.get_strategy('col1',
-                                                             FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
+        strategy = FeatureColumnStrategyFactory.get_strategy('col1', FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
                                                              self.data_model)
 
         self.assertIsInstance(strategy, CategoricalColumnWithVOCListStrategy)
 
     def test_indicator_column(self):
-        strategy = FeatureColumnStrategyFactory.get_strategy('col1',
-                                                             FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
+        strategy = FeatureColumnStrategyFactory.get_strategy('col1', FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
                                                              self.data_model)
 
         self.assertIsInstance(strategy, IndicatorColumnWithVOCListStrategy)
