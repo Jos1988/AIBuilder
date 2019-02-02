@@ -56,7 +56,7 @@ class Builder(ABC):
         description = {}
         specs = self.get_specs()
         for spec in specs:
-            description[spec.name] = spec.value
+            description[spec.name] = spec.describe()
 
         return description
 

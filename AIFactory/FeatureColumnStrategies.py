@@ -82,7 +82,7 @@ class CategoricalColumnWithIdentity(FeatureColumnStrategy):
         num_buckets = len(df[self.column_name].unique())
 
         new_column = tf.feature_column.categorical_column_with_identity(
-            self.column_name,
+            key=self.column_name,
             num_buckets=num_buckets)
 
         return [new_column]

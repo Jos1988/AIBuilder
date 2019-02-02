@@ -38,6 +38,8 @@ class BuilderTest(unittest.TestCase):
         self.specification_one = mock.patch('Builder.Specification')
         self.specification_one.name = 'spec1'
         self.specification_one.value = 'value1'
+        self.specification_one.describe = mock.Mock()
+        self.specification_one.describe.return_value = 'value1'
         self.specification_one.validate = mock.Mock()
 
         self.builder.get_specs = mock.Mock()

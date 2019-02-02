@@ -1,4 +1,6 @@
 import unittest
+from unittest import mock
+
 from AIBuilder.AIFactory.Specifications import TypeSpecification, RangeSpecification, \
     DataTypeSpecification, IsCallableSpecification, NullSpecification, Descriptor, FeatureColumnsSpecification
 
@@ -47,6 +49,42 @@ class TestDataTypeSpecification(unittest.TestCase):
 
         with self.assertRaises(AssertionError):
             self.data_type_specification.validate()
+
+    def test_describe_list(self):
+        self.data_type_specification = DataTypeSpecification('test_dir', ['test_one'], list)
+        description = self.data_type_specification.describe()
+        self.assertEqual(['test_one'], description)
+
+    def test_describe_list_ignore_object(self):
+        self.data_type_specification = DataTypeSpecification('test_dir', ['test_one', mock.Mock()], list)
+        description = self.data_type_specification.describe()
+        self.assertEqual(['test_one'], description)
+
+    def test_describe_list_ignore_callable(self):
+        def callMe():
+            return 'hello!'
+
+        self.data_type_specification = DataTypeSpecification('test_dir', ['test_one', callMe], list)
+        description = self.data_type_specification.describe()
+        self.assertEqual(['test_one'], description)
+
+    def test_describe_dict(self):
+        self.data_type_specification = DataTypeSpecification('test_dir', {0: 'test', 1: 'test_one'}, dict)
+        description = self.data_type_specification.describe()
+        self.assertEqual({0: 'test', 1: 'test_one'}, description)
+
+    def test_describe_dict_ignore_object(self):
+        self.data_type_specification = DataTypeSpecification('test_dir', {0: 'test', 1: mock.Mock()}, dict)
+        description = self.data_type_specification.describe()
+        self.assertEqual({0: 'test'}, description)
+
+    def test_describe_dict_ignore_callable(self):
+        def callMe():
+            return 'hello!'
+
+        self.data_type_specification = DataTypeSpecification('test_dir', {0: 'test', callMe: 1}, dict)
+        description = self.data_type_specification.describe()
+        self.assertEqual({0: 'test'}, description)
 
 
 class TestIsCallableSpecification(unittest.TestCase):
@@ -115,7 +153,6 @@ class TestDescriptor(unittest.TestCase):
 
 
 class TestFeatureColumnsSpecification(unittest.TestCase):
-
     valid_types = ['type_one', 'type_two']
 
     def test_valid(self):
