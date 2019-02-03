@@ -99,7 +99,7 @@ class CategoricalColumnWithIdentity(FeatureColumnStrategy):
 class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
     def build_column(self) -> list:
-        category_grabber = FromListCategoryGrabber(data_model=self.data_model, column_name=self.column_name)
+        category_grabber = SimpleCategoryGrabber(data_model=self.data_model, column_name=self.column_name)
         categories = category_grabber.grab()
 
         categorical_column = tf.feature_column.categorical_column_with_vocabulary_list(

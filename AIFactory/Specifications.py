@@ -26,7 +26,7 @@ class TypeSpecification(Specification):
         self.valid_types = valid_types
 
     def validate(self):
-        assert self.value in self.valid_types, 'Value {} must be in {}, {} given' \
+         assert self.value in self.valid_types, 'Value {} must be in {}, {} given' \
             .format(self.name, self.valid_types, self.value)
 
 

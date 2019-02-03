@@ -6,7 +6,11 @@ from AIBuilder import AI
 
 class EstimatorStrategy(ABC):
     LINEAR_REGRESSOR = 'linear_regressor'
+    LINEAR_CLASSIFIER = 'linear_classifier'
     DNN_REGRESSOR = 'dnn_regressor'
+    DNN_CLASSIFIER = 'dnn_classifier'
+
+    ALL_STRATEGIES = [LINEAR_CLASSIFIER, LINEAR_REGRESSOR, DNN_REGRESSOR, DNN_CLASSIFIER]
 
     def __init__(self, ml_model: AI, **kwargs):
         self.ML_Model = ml_model
@@ -56,6 +60,25 @@ class LinearRegressorStrategy(EstimatorStrategy):
         return EstimatorStrategy.LINEAR_REGRESSOR
 
 
+class LinearClassifier(EstimatorStrategy):
+
+    def build_estimator(self) -> tf.feature_column:
+        estimator = tf.estimator.LinearClassifier(
+            feature_columns=self.ML_Model.training_data.get_tf_feature_columns(),
+            optimizer=self.ML_Model.optimizer,
+            model_dir=self.get_model_dir()
+        )
+
+        return estimator
+
+    def validate_result(self):
+        assert isinstance(self.result, tf.estimator.LinearClassifier)
+
+    @staticmethod
+    def estimator_type() -> str:
+        return EstimatorStrategy.LINEAR_CLASSIFIER
+
+
 class DNNRegressorStrategy(EstimatorStrategy):
 
     def build_estimator(self) -> tf.feature_column:
@@ -88,10 +111,44 @@ class DNNRegressorStrategy(EstimatorStrategy):
         return EstimatorStrategy.DNN_REGRESSOR
 
 
+class DNNClassifier(EstimatorStrategy):
+
+    def build_estimator(self) -> tf.feature_column:
+        kwargs = {'feature_columns': self.ML_Model.training_data.get_tf_feature_columns(),
+                  'optimizer': self.ML_Model.optimizer,
+                  'model_dir': self.get_model_dir(), }
+
+        kwargs.update(self.kwargs)
+        self.validate_kwargs(kwargs)
+        estimator = tf.estimator.DNNRegressor(**kwargs)
+
+        return estimator
+
+    @staticmethod
+    def kwarg_requirements() -> dict:
+        return {'hidden_units': list}
+
+    def validate_kwargs(self, kwargs):
+        kwarg_min_requirements = self.kwarg_requirements()
+        for key, data_type in kwarg_min_requirements.items():
+            assert key in kwargs, 'DNNClassifier missing requires argument: {}.'.format(key)
+            assert type(kwargs[key]) is data_type, 'DNNClassifier argument for {} must be {}, {} given ({})' \
+                .format(key, data_type, type(kwargs[key]), kwargs[key])
+
+    def validate_result(self):
+        assert isinstance(self.result, tf.estimator.DNNRegressor)
+
+    @staticmethod
+    def estimator_type() -> str:
+        return EstimatorStrategy.DNN_CLASSIFIER
+
+
 class EstimatorStrategyFactory:
     strategies = [
         LinearRegressorStrategy,
-        DNNRegressorStrategy
+        LinearClassifier,
+        DNNRegressorStrategy,
+        DNNClassifier
     ]  # type: List[EstimatorStrategy]
 
     @staticmethod

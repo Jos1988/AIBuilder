@@ -3,7 +3,7 @@ from unittest import mock
 from abc import ABC, abstractmethod
 from AIBuilder.AI import AI
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy, LinearRegressorStrategy, \
-    EstimatorStrategyFactory, DNNRegressorStrategy
+    EstimatorStrategyFactory, DNNRegressorStrategy, LinearClassifier, DNNClassifier
 
 
 class AbstractEstimatorStrategyTester(ABC):
@@ -48,10 +48,31 @@ class TestLinearRegressorStrategy(AbstractEstimatorStrategyTester, unittest.Test
         self.assertIsNotNone(result)
 
 
+class TestLinearClassifierStrategy(AbstractEstimatorStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> EstimatorStrategy:
+        return LinearClassifier
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
 class TestDNNRegressorStrategy(AbstractEstimatorStrategyTester, unittest.TestCase):
 
     def get_strategy_class_name(self) -> EstimatorStrategy:
         return DNNRegressorStrategy
+
+    def additional_parameters(self):
+        return {'hidden_units': [5, 10, 5]}
+
+    def assert_result(self, result):
+        self.assertIsNotNone(result)
+
+
+class TestDNNClassifier(AbstractEstimatorStrategyTester, unittest.TestCase):
+
+    def get_strategy_class_name(self) -> EstimatorStrategy:
+        return DNNClassifier
 
     def additional_parameters(self):
         return {'hidden_units': [5, 10, 5]}

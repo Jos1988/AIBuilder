@@ -171,7 +171,6 @@ class DataSplitterBuilder(Builder):
 
 
 class EstimatorBuilder(Builder):
-    valid_estimator_types = [EstimatorStrategy.LINEAR_REGRESSOR, EstimatorStrategy.DNN_REGRESSOR]
     estimator: str
     estimator_type = None
 
@@ -181,7 +180,7 @@ class EstimatorBuilder(Builder):
 
         self.kwargs = NullSpecification('kwargs')
         if kwargs is not None:
-            self.kwargs = TypeSpecification('kwargs', kwargs, dict)
+            self.kwargs = DataTypeSpecification('kwargs', kwargs, dict)
 
     @property
     def dependent_on(self) -> list:
@@ -192,7 +191,7 @@ class EstimatorBuilder(Builder):
         return self.ESTIMATOR
 
     def set_estimator(self, estimator_type):
-        self.estimator_type = TypeSpecification('estimator_type', estimator_type, self.valid_estimator_types)
+        self.estimator_type = TypeSpecification('estimator_type', estimator_type, EstimatorStrategy.ALL_STRATEGIES)
 
     def validate(self):
         self.validate_specifications()
