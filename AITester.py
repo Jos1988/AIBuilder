@@ -1,9 +1,80 @@
+from typing import List
+
+import pandas as pd
 from abc import ABC, abstractmethod
+
+from AIBuilder import AI
 from AIBuilder.AI import AbstractAI
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, TesterPrinter, ReportPrintStrategy
 from AIBuilder.Summizer import Summizer
 from datetime import datetime
 import hashlib
+
+
+class Evaluator(ABC):
+
+    def __init__(self):
+        self.ml_model = None
+        self.target_column = None
+        self.result = {}
+
+    def load_ml_model(self, ml_model: AI):
+        self.ml_model = ml_model
+        self.target_column = self.ml_model.get_evaluation_data().target_column_name
+        self.result = {}
+
+    @abstractmethod
+    def evaluate(self) -> dict:
+        pass
+
+
+class BinaryClassificationEvaluator(Evaluator):
+
+    def evaluate(self) -> dict:
+        predictions = self.get_predictions()
+        expected_labels = self.ml_model.get_evaluation_data().get_dataframe()[self.target_column]
+
+        assert len(expected_labels) == len(predictions), 'Number of expectations does not match number of predictions.'
+
+        evaluation_data_length = len(expected_labels)
+        highest_frequencies = self.highest_frequency(expected_labels)
+        successes = self.count_successful_predictions(expected_labels, predictions)
+
+        self.result = {'bin class accuracy': successes / evaluation_data_length,
+                       'bin class baseline': highest_frequencies / evaluation_data_length}
+
+        return self.result
+
+    @staticmethod
+    def highest_frequency(expected_labels: pd.Series):
+        class_counts = expected_labels.value_counts().to_dict()
+        baseline_successes = 0
+        for value, count in class_counts.items():
+            if count > baseline_successes:
+                baseline_successes = count
+
+        return baseline_successes
+
+    def get_predictions(self):
+        predictor = self.ml_model.estimator.predict(input_fn=self.ml_model.evaluation_fn)
+        predictions = self.load_predictions_from_predictor(predictor)
+        return predictions
+
+    @staticmethod
+    def count_successful_predictions(expected_labels, predictions):
+        success = 0
+        for expected, prediction in zip(expected_labels, predictions):
+            if expected == round(prediction):
+                success += 1
+
+        return success
+
+    @staticmethod
+    def load_predictions_from_predictor(predictor):
+        predictions = []
+        for p in predictor:
+            predictions.append(p['predictions'][0])
+        return predictions
 
 
 class AbstractAITester(ABC):
@@ -20,7 +91,7 @@ class AbstractAITester(ABC):
 class AITester(AbstractAITester):
     AI: AbstractAI
 
-    def __init__(self, summizer: Summizer):
+    def __init__(self, summizer: Summizer, evaluators: List[Evaluator] = None):
         self.summizer = summizer
         self.test_time = None
         self.results = {}
@@ -28,6 +99,9 @@ class AITester(AbstractAITester):
         self.console_printer = TesterPrinter(self.console_print_strategy)
         self.description_hash = None
         self.report_printer = None
+        self.evaluators = []
+        if evaluators is not None:
+            self.evaluators = evaluators
 
     def run_AI_test(self, ai: AbstractAI):
         self.set_AI(ai)
@@ -71,6 +145,7 @@ class AITester(AbstractAITester):
     def evaluate_AI(self):
         self.summizer.log('start evaluation', None)
         self.results = self.AI.evaluate()
+        self.run_evaluators()
 
         self.print_description()
         self.print_results()
@@ -80,6 +155,12 @@ class AITester(AbstractAITester):
         self.summizer.log('finished evaluation', None)
         self.summizer.summize(self.console_print_strategy)
         self.summizer.reset()
+
+    def run_evaluators(self):
+        for evaluator in self.evaluators:
+            evaluator.load_ml_model(self.AI)
+            evaluator_results = evaluator.evaluate()
+            self.results.update(evaluator_results)
 
     def print_results(self):
         self.console_printer.separate()
