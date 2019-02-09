@@ -51,14 +51,18 @@ class Scrubber(ABC):
                                    .format(self.__class__, column, data_type, meta_data.get_column_type(column)))
 
 
-class MissingDataScrubber(Scrubber):
+class ConvertToNumericScrubber(Scrubber):
+    """ Convert series to numeric.
+    """
+
+    def __init__(self, column_names: List[str], downcast=None, errors='coerce'):
+        self.errors = errors
+        self.column_names = column_names
+        self.downcast = downcast
 
     @property
     def scrubber_config_list(self):
         return {}
-
-    def __init__(self, missing_category_name: str):
-        self._missing_category_name = missing_category_name
 
     def validate(self, data_model: DataModel):
         pass
@@ -67,17 +71,175 @@ class MissingDataScrubber(Scrubber):
         pass
 
     def scrub(self, data_model: DataModel) -> DataModel:
-        categorical_columns = data_model.metadata.categorical_columns
-
-        return self._scrub_categorical_data(data_model, categorical_columns)
-
-    def _scrub_categorical_data(self, data_model: DataModel, categorical_columns: list) -> DataModel:
-        data_model.validate_columns(categorical_columns)
         df = data_model.get_dataframe()
-        df[categorical_columns] = df[categorical_columns].fillna(self._missing_category_name)
+        for column_name in self.column_names:
+            num_column = pd.to_numeric(df[column_name], downcast=self.downcast, errors=self.errors)
+            df[column_name] = num_column
+
         data_model.set_dataframe(df)
 
         return data_model
+
+
+class MissingDataScrubber(Scrubber):
+
+    def __init__(self, scrub_columns: List[str]):
+        """ Removes rows with missing data.
+
+        :param scrub_columns:
+        """
+        self.scrub_columns = scrub_columns
+
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+
+        df = self.scrub_numerical(data_model, df)
+        df = df.reset_index(drop=True)
+        df = self.scrub_categorical(data_model, df)
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+    def scrub_categorical(self, data_model, df):
+        categorical_col_names_to_check = list(set(self.scrub_columns) & set(data_model.metadata.categorical_columns))
+        categorical_cols_to_check = df[categorical_col_names_to_check]
+        indexes_with_none = self.get_indexes_with_none_value(categorical_cols_to_check)
+
+        return df.drop(index=indexes_with_none)
+
+    def scrub_numerical(self, data_model, df):
+        numerical_col_names_to_check = list(set(self.scrub_columns) & set(data_model.metadata.numerical_columns))
+        numerical_cols_to_check = df[numerical_col_names_to_check]
+        indexes_with_nan = self.get_indexes_with_nan_value(numerical_cols_to_check)
+
+        return df.drop(index=indexes_with_nan)
+
+    def get_indexes_with_nan_value(self, cols_to_check) -> set:
+        indexes_with_nan = set()
+        for index in cols_to_check.index:
+            slice = cols_to_check.values[index]
+            if self.has_nan(slice):
+                indexes_with_nan.add(index)
+
+        return indexes_with_nan
+
+    def get_indexes_with_none_value(self, cols_to_check) -> set:
+        indexes_with_none = set()
+        for index in cols_to_check.index:
+            slice = cols_to_check.values[index]
+            if self.has_none(slice):
+                indexes_with_none.add(index)
+
+        return indexes_with_none
+
+    @staticmethod
+    def has_nan(values_to_check: list) -> bool:
+        for value in values_to_check:
+            if np.isnan(value):
+                return True
+        return False
+
+    @staticmethod
+    def has_none(values_to_check: list) -> bool:
+        for value in values_to_check:
+            # todo: change obj structure as is does no longer only check none.
+            if value is None or type(value) is not str and np.isnan(value):
+                return True
+        return False
+
+
+class MissingDataReplacer(Scrubber):
+
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def __init__(self, scrub_columns: list, missing_category_name: str = 'unknown',
+                 missing_numerical_value: Optional[Union[int, float, str]] = None):
+        """ Scrubs missing data from dataset in various ways.
+
+        :type missing_numerical_value: int|float|str
+        :param missing_category_name: Replace missing values in categorical data to this value.
+        :param scrub_columns: Scrub these columns.
+        """
+        self.missing_value = missing_numerical_value
+        self.columns_to_scrub = scrub_columns
+        self.missing_category_name = missing_category_name
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        data_model = self.scrub_categorical_data(data_model)
+        data_model = self.scrub_numerical_columns(data_model)
+
+        return data_model
+
+    def scrub_categorical_data(self, data_model):
+        categorical_columns = data_model.metadata.categorical_columns
+        categorical_columns_to_scrub = list(set(categorical_columns) & set(self.columns_to_scrub))
+        data_model = self._scrub_categorical_data(data_model, categorical_columns_to_scrub)
+
+        return data_model
+
+    def scrub_numerical_columns(self, data_model):
+        numerical_columns = data_model.metadata.numerical_columns
+        numerical_columns_to_scrub = list(set(numerical_columns) & set(self.columns_to_scrub))
+        data_model = self._scrub_numerical_data(data_model, numerical_columns_to_scrub)
+
+        return data_model
+
+    def _scrub_categorical_data(self, data_model: DataModel, categorical_columns: list) -> DataModel:
+        data_model.validate_columns(categorical_columns)
+        self.fillNaForColumns(data_model=data_model, columns=categorical_columns,
+                              replacement_value=self.missing_category_name)
+
+        return data_model
+
+    def _scrub_numerical_data(self, data_model: DataModel, numerical_columns: list) -> DataModel:
+        data_model.validate_columns(numerical_columns)
+
+        if type(self.missing_value) is int and type(self.missing_value):
+            self.fillNaForColumns(data_model, numerical_columns, self.missing_value)
+
+        if self.missing_value == 'average':
+            df = data_model.get_dataframe()
+            for col in numerical_columns:
+                average = self.get_column_average(data_model=data_model, column=col)
+                df[col] = df[col].fillna(average)
+
+            data_model.set_dataframe(df)
+
+        return data_model
+
+    @staticmethod
+    def get_column_average(data_model: DataModel, column: str):
+        df = data_model.get_dataframe()
+        num_values = df[column].tolist()
+        cleaned_num_values = [value for value in num_values if str(value) != 'nan']
+        average = sum(cleaned_num_values) / len(cleaned_num_values)
+
+        return average
+
+    @staticmethod
+    def fillNaForColumns(data_model: DataModel, columns: list, replacement_value):
+        df = data_model.get_dataframe()
+        df[columns] = df[columns].fillna(replacement_value)
+        data_model.set_dataframe(df)
 
 
 class StringToDateScrubber(Scrubber):
@@ -543,7 +705,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
 
 class ConvertToColumnScrubber(Scrubber):
-    """Create a new column based and fill have it filled by callable.
+    """Create a new column based and have it filled by callable.
     """
 
     def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict):
@@ -617,7 +779,8 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
 
         self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
 
-        alias_loader = AliasLoader(use_synonyms=self.use_synonyms(), min_syntactic_distance=self.min_syntactic_distance(),
+        alias_loader = AliasLoader(use_synonyms=self.use_synonyms(),
+                                   min_syntactic_distance=self.min_syntactic_distance(),
                                    verbosity=self.verbosity)
 
         cat_alias = alias_loader.load_cat_aliases(keywords)
@@ -645,5 +808,3 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
                          new_column_type=MetaData.CATEGORICAL_DATA_TYPE,
                          converter=convert,
                          required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
-
-

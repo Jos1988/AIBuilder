@@ -1,37 +1,100 @@
 import unittest
 from AIBuilder.Data import DataModel, MetaData
 import pandas as pd
+import numpy as np
 from datetime import datetime
-from AIBuilder.DataScrubbing import MissingDataScrubber, StringToDateScrubber, AverageColumnScrubber, \
+from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
-    KeyWordToCategoryScrubber
+    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber
+
+
+class TestConvertToNumericScrubber(unittest.TestCase):
+
+    def setUp(self):
+        self.data = {
+            'col_1': ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+            'col_2': ['0.2', '1.2', '2.2', '3.2', '4.2', '5.2', '6.2', '7.2', '8.2', '9.2'],
+        }
+
+        self.data_frame = pd.DataFrame(self.data)
+        self.data_model = DataModel(self.data_frame)
+        self.data_model.metadata.define_numerical_columns(['col_1', 'col_2'])
+
+    def testScrub(self):
+        scrubber = ConvertToNumericScrubber(column_names=['col_1', 'col_2'])
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        for value in df['col_1'].values:
+            self.assertTrue(type(value) == np.int64)
+
+        for value in df['col_2'].values:
+            self.assertTrue(type(value) == np.float64)
 
 
 class TestMissingDataScrubber(unittest.TestCase):
 
     def setUp(self):
+        self.data = {
+            'col_1': [0, 1, None, 3, 4, 5, 6, 7, 8, 9],
+            'col_2': [0, 1, 2, 3, 4, 5, 6, 7, None, 9],
+            'col_3': [np.nan, 'b', 'c', 'd', 'e', 'f', 'g', None, 'i', 'j'],
+        }
+
+        self.data_frame = pd.DataFrame(self.data)
+        self.data_model = DataModel(self.data_frame)
+        self.data_model.metadata.define_numerical_columns(['col_1', 'col_2'])
+        self.data_model.metadata.define_categorical_columns(['col_3'])
+
+    def test_scrubbing(self):
+        scrubber = MissingDataScrubber(scrub_columns=['col_1', 'col_2', 'col_3'])
+        result = scrubber.scrub(self.data_model)
+        self.assertEqual(len(result), 6)
+        for value in result.get_dataframe().values:
+            self.assertFalse(np.isnan(value[0]))
+            self.assertFalse(np.isnan(value[1]))
+
+
+class TestMissingDataReplacer(unittest.TestCase):
+
+    def setUp(self):
         self._data = {
-            'numerical_1': [1, 2, 3],
-            'categorical_1': ['one', None, 'two'],
-            'categorical_2': ['apple', 'pie', None],
-            'unknown_1': [9, 10, 11]
+            'numerical_1': [2, None, 3, 4],
+            'numerical_3': [None, 2, 3, 4],
+            'categorical_1': ['one', None, 'two', 'three'],
+            'categorical_2': ['apple', 'pie', None, 'three'],
+            'categorical_3': ['apple', 'pie', None, 'three'],
+            'unknown_1': [9, 10, 11, 12]
         }
 
         self._dataframe = pd.DataFrame(data=self._data)
         self._data_model = DataModel(self._dataframe)
 
     def test_categorize_columns(self):
-        categorical = ['categorical_1', 'categorical_2']
+        categorical = ['categorical_1', 'categorical_2', 'categorical_3']
         self._data_model.metadata.define_categorical_columns(categorical)
 
+        numerical = ['numerical_1', 'numerical_3']
+        self._data_model.metadata.define_numerical_columns(numerical)
+
         unknown_category = 'unknown'
-        missing_data_scrubber = MissingDataScrubber(unknown_category)
-        missing_data_scrubber.validate(self._data_model)
-        missing_data_scrubber.scrub(self._data_model)
+        missing_data_scrubber1 = MissingDataReplacer(missing_category_name=unknown_category,
+                                                     missing_numerical_value='average',
+                                                     scrub_columns=['categorical_1', 'categorical_2', 'numerical_1'])
+        missing_data_scrubber1.validate(self._data_model)
+        missing_data_scrubber1.scrub(self._data_model)
+
+        missing_data_scrubber2 = MissingDataReplacer(missing_numerical_value=1, scrub_columns=['numerical_3'])
+        missing_data_scrubber2.validate(self._data_model)
+        missing_data_scrubber2.scrub(self._data_model)
+
         self.assertEqual(unknown_category, self._data_model.get_dataframe()['categorical_1'][1])
         self.assertEqual(unknown_category, self._data_model.get_dataframe()['categorical_2'][2])
-        self.assertEqual(1, self._data_model.get_dataframe()['numerical_1'][0])
+        self.assertEqual(None, self._data_model.get_dataframe()['categorical_3'][2])
+        self.assertEqual(2, self._data_model.get_dataframe()['numerical_1'][0])
+        self.assertEqual(3, self._data_model.get_dataframe()['numerical_1'][1])
+        self.assertEqual(1, self._data_model.get_dataframe()['numerical_3'][0])
+        self.assertEqual(2, self._data_model.get_dataframe()['numerical_3'][1])
         self.assertEqual(9, self._data_model.get_dataframe()['unknown_1'][0])
 
 

@@ -43,7 +43,7 @@ class RangeSpecification(Specification):
 
 
 def is_primitive(var):
-    return isinstance(var, (int, float, bool, str))
+    return isinstance(var, (int, float, bool, str, dict, list))
 
 
 class DataTypeSpecification(Specification):
@@ -52,6 +52,7 @@ class DataTypeSpecification(Specification):
         super().__init__(name, value)
         self.data_type = data_type
 
+    # Have this function go recursively through any lists and dicts it finds, with unit test :).
     def describe(self):
         description = self.value
 

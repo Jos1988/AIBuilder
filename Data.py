@@ -162,6 +162,9 @@ class DataModel:
 
         return self._dataframe[self.target_column_name]
 
+    def __len__(self):
+        return len(self._dataframe)
+
     def __repr__(self):
         return repr({
             'data_model': self.metadata,
