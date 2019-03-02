@@ -170,17 +170,47 @@ class DataSplitterBuilder(Builder):
         return data
 
 
+class ConfigDescriber(tf.estimator.RunConfig):
+    description: str
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __str__(self):
+        return str(self.description)
+
+
 class EstimatorBuilder(Builder):
-    estimator: str
+    estimator = None
     estimator_type = None
 
-    def __init__(self, estimator_type: str, kwargs: dict = None):
+    def __init__(self, estimator_type: str, config_kwargs: dict = None, kwargs: dict = None):
+        """ build Estimator
+
+        :param estimator_type: valid estimator strategy
+        :param config_kwargs: pass the kwargs for a tf.estimator.RunConfig here, otherwise it will not be printed
+        correctly in description.
+        :param kwargs: estimator kwargs, do not pass objects if config is printed. //todo: find way to accurately print objects.
+        """
         super().__init__()
         self.set_estimator(estimator_type)
+        if config_kwargs is not None:
+            kwargs = self.set_config(config_kwargs, kwargs)
 
         self.kwargs = NullSpecification('kwargs')
         if kwargs is not None:
             self.kwargs = DataTypeSpecification('kwargs', kwargs, dict)
+
+    @staticmethod
+    def set_config(config_kwargs, kwargs):
+        config = ConfigDescriber(**config_kwargs)
+        config.description = config_kwargs
+        if kwargs is None:
+            kwargs = {}
+
+        kwargs.update({'config': config})
+
+        return kwargs
 
     @property
     def dependent_on(self) -> list:
@@ -204,8 +234,8 @@ class EstimatorBuilder(Builder):
         assert strategy is not None, 'Strategy for building Estimator of type {} not found.' \
             .format(self.estimator_type())
 
-        estimator = strategy.build()
-        neural_net.set_estimator(estimator)
+        self.estimator = strategy.build()
+        neural_net.set_estimator(self.estimator)
 
         return
 
@@ -229,7 +259,7 @@ class InputFunctionBuilder(Builder):
         self.train_kwargs = DataTypeSpecification('train_kwargs', train_kwargs, dict)
 
         self.evaluation_fn_name = TypeSpecification('evaluation function', evaluation_fn, self.VALID_FN_NAMES)
-        #todo: idem.
+        # todo: idem.
         self.evaluation_kwargs = DataTypeSpecification('evaluation_kwargs', evaluation_kwargs, dict)
 
         self.fn_holder = InputFunctionHolder

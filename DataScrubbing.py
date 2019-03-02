@@ -3,7 +3,7 @@ from typing import List, Union, Optional
 
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
-from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification
+from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification, TypeSpecification
 from AIBuilder.Data import DataModel, MetaData
 from currency_converter import CurrencyConverter
 from datetime import datetime
@@ -808,3 +808,98 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
                          new_column_type=MetaData.CATEGORICAL_DATA_TYPE,
                          converter=convert,
                          required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
+
+
+class BinaryResampler(Scrubber):
+    """ Resample an imbalanced dataset by a binary category. If 70% of data points is positive, for example, the dataset
+        is imbalanced. This scrubber can either copy the negative data points until the dataset is balanced or remove
+        negative data points.
+    """
+    OVER_SAMPLING = 'over sampling'
+    UNDER_SAMPLING = 'under sampling'
+
+    def __init__(self, column_name: str, strategy: str, shuffle: bool = True):
+        self.column_name = DataTypeSpecification('column_names', column_name, str)
+        self.strategy = TypeSpecification('strategy', strategy, [self.OVER_SAMPLING, self.UNDER_SAMPLING])
+        self.shuffle = DataTypeSpecification('shuffle', shuffle, bool)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.column_name(): MetaData.CATEGORICAL_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        df = data_model.get_dataframe()
+        unique_categories = df[self.column_name()].unique()
+
+        assert len(unique_categories) == 2, \
+            'Column {} is not binary, categories found: {}'.format(self.column_name(), str(unique_categories))
+
+        assert self.column_name() in df.columns
+        assert self.column_name() in data_model.metadata.categorical_columns
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+
+        if self.strategy() == self.OVER_SAMPLING:
+            df = data_model.get_dataframe()
+            categories = df[self.column_name()].unique()
+
+            stack_one = df.loc[df[self.column_name()] == categories[0]]
+            stack_two = df.loc[df[self.column_name()] == categories[1]]
+
+            if len(stack_one) == len(stack_two):
+                return data_model
+
+            long_stack = stack_two
+            short_stack = stack_one
+            if len(stack_one) > len(stack_two):
+                long_stack = stack_one
+                short_stack = stack_two
+
+            length_to_have = len(long_stack)
+
+            duplicate_short_stack = short_stack.copy()
+            while len(short_stack) < length_to_have:
+                short_stack = pd.concat([short_stack, duplicate_short_stack])
+
+            short_stack = self.cut_df_to_length(short_stack, length_to_have)
+
+
+        if self.strategy() == self.UNDER_SAMPLING:
+            df = data_model.get_dataframe()
+            categories = df[self.column_name()].unique()
+
+            stack_one = df.loc[df[self.column_name()] == categories[0]]
+            stack_two = df.loc[df[self.column_name()] == categories[1]]
+
+            if len(stack_one) == len(stack_two):
+                return data_model
+
+            long_stack = stack_two
+            short_stack = stack_one
+            if len(stack_one) > len(stack_two):
+                long_stack = stack_one
+                short_stack = stack_two
+
+            long_stack = self.cut_df_to_length(long_stack, len(short_stack))
+
+        assert len(short_stack) == len(long_stack)
+
+        scrubbed_df = pd.concat([long_stack, short_stack])
+
+        scrubbed_df = scrubbed_df.sort_index()
+        if self.shuffle():
+            scrubbed_df = scrubbed_df.sample(frac=1)
+        scrubbed_df = scrubbed_df.reset_index(drop=True)
+        data_model.set_dataframe(scrubbed_df)
+
+        return data_model
+
+    @staticmethod
+    def cut_df_to_length(dataframe: pd.DataFrame, length: int) -> pd.DataFrame:
+        assert len(dataframe) > length, 'Cannot cut dataframe smaller than required length.'
+
+        return dataframe.head(length)
+

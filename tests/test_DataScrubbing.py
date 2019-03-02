@@ -6,7 +6,7 @@ from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
-    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber
+    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler
 
 
 class TestConvertToNumericScrubber(unittest.TestCase):
@@ -630,6 +630,44 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
         print(result_df['cat_1'].values.tolist())
         self.assertEqual(result_df['cat_1'].values.tolist(),
                          ['one', 'one', 'two', 'three', 'one', 'unknown', 'one', 'foo bar'])
+
+
+class TestBinaryResampler(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'num_1': [0, 1, 2, 3, 4, 5, 6, 7, 8, 50],
+            'cat_2': [1, 0, 1, 0, 1, 1, 1, 1, 0, 1]
+        }
+
+        metadata = MetaData()
+        metadata.define_numerical_columns(['num_1'])
+        metadata.define_categorical_columns(['cat_2'])
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def test_validate(self):
+        scrubber = BinaryResampler('cat_2', BinaryResampler.UNDER_SAMPLING)
+        scrubber.validate_metadata(self.data_model.metadata)
+        scrubber.validate(self.data_model)
+
+    def test_scrub_under_sampling(self):
+        scrubber = BinaryResampler('cat_2', BinaryResampler.UNDER_SAMPLING)
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        print(df)
+
+        self.assertEqual(len(df), 6)
+        self.assertEqual(0.5, df['cat_2'].mean())
+
+    def test_scrub_over_sampling(self):
+        scrubber = BinaryResampler('cat_2', BinaryResampler.OVER_SAMPLING)
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+
+        self.assertEqual(len(df), 14)
+        self.assertEqual(0.5, df['cat_2'].mean())
 
 
 if __name__ == '__main__':

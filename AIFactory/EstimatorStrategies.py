@@ -44,11 +44,14 @@ class EstimatorStrategy(ABC):
 class LinearRegressorStrategy(EstimatorStrategy):
 
     def build_estimator(self) -> tf.feature_column:
-        estimator = tf.estimator.LinearRegressor(
-            feature_columns=self.ML_Model.training_data.get_tf_feature_columns(),
-            optimizer=self.ML_Model.optimizer,
-            model_dir=self.get_model_dir()
-        )
+        args = {
+            'feature_columns': self.ML_Model.training_data.get_tf_feature_columns(),
+            'optimizer': self.ML_Model.optimizer,
+            'model_dir': self.get_model_dir()
+        }
+
+        self.kwargs.update(args)
+        estimator = tf.estimator.LinearRegressor(**self.kwargs)
 
         return estimator
 
@@ -63,11 +66,12 @@ class LinearRegressorStrategy(EstimatorStrategy):
 class LinearClassifier(EstimatorStrategy):
 
     def build_estimator(self) -> tf.feature_column:
-        estimator = tf.estimator.LinearClassifier(
-            feature_columns=self.ML_Model.training_data.get_tf_feature_columns(),
-            optimizer=self.ML_Model.optimizer,
-            model_dir=self.get_model_dir()
-        )
+        args = {'feature_columns': self.ML_Model.training_data.get_tf_feature_columns(),
+                'optimizer': self.ML_Model.optimizer,
+                'model_dir': self.get_model_dir()}
+
+        self.kwargs.update(args)
+        estimator = tf.estimator.LinearClassifier(**self.kwargs)
 
         return estimator
 
@@ -120,7 +124,7 @@ class DNNClassifier(EstimatorStrategy):
 
         kwargs.update(self.kwargs)
         self.validate_kwargs(kwargs)
-        estimator = tf.estimator.DNNRegressor(**kwargs)
+        estimator = tf.estimator.DNNClassifier(**kwargs)
 
         return estimator
 
@@ -136,7 +140,7 @@ class DNNClassifier(EstimatorStrategy):
                 .format(key, data_type, type(kwargs[key]), kwargs[key])
 
     def validate_result(self):
-        assert isinstance(self.result, tf.estimator.DNNRegressor)
+        assert isinstance(self.result, tf.estimator.DNNClassifier)
 
     @staticmethod
     def estimator_type() -> str:

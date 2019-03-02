@@ -41,7 +41,8 @@ class BinaryClassificationEvaluator(Evaluator):
         successes = self.count_successful_predictions(expected_labels, predictions)
 
         self.result = {'bin class accuracy': successes / evaluation_data_length,
-                       'bin class baseline': highest_frequencies / evaluation_data_length}
+                       'bin class baseline': highest_frequencies / evaluation_data_length,
+                       'bin class 1 - baseline': 1 - highest_frequencies / evaluation_data_length}
 
         return self.result
 

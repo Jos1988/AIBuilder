@@ -114,7 +114,7 @@ class TestEstimatorBuilder(unittest.TestCase):
         mock_data_model = mock.MagicMock()
         mock_optimizer = mock.MagicMock()
 
-        estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
+        estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR, config_kwargs={'tf_random_seed': 123})
 
         mock_data_model.get_tf_feature_columns.return_value = []
 
@@ -131,6 +131,7 @@ class TestEstimatorBuilder(unittest.TestCase):
 
         estimator_builder.build(arti)
         arti.set_estimator.assert_called_once()
+        self.assertEqual(123, estimator_builder.estimator.config.tf_random_seed)
 
 
 class TestInputFnBuilder(unittest.TestCase):
