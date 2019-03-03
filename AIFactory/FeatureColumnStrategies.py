@@ -1,3 +1,4 @@
+import pandas as pd
 from abc import ABC, abstractmethod
 from typing import List
 import tensorflow as tf
@@ -10,11 +11,13 @@ class FeatureColumnStrategy(ABC):
     NUMERICAL_COLUMN = 'numeric_column'
     CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
     MULTIPLE_HOT_COLUMNS = 'multiple_hot_columns'
+    BUCKETIZED_COLUMN = 'bucketized_column'
 
     ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,
-                   INDICATOR_COLUMN_VOC_LIST, MULTIPLE_HOT_COLUMNS]
+                   INDICATOR_COLUMN_VOC_LIST, MULTIPLE_HOT_COLUMNS, BUCKETIZED_COLUMN]
 
-    def __init__(self, column_name: str, data_model: DataModel):
+    def __init__(self, column_name: str, data_model: DataModel, feature_config: dict = None):
+        self.feature_config = feature_config
         self.data_model = data_model
         self.column_name = column_name
         self.results = None
@@ -165,21 +168,65 @@ class MultipleHotFeatureStrategy(FeatureColumnStrategy):
         return [FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS]
 
 
+def bucketize_data(column_data: pd.Series, num_buckets: int) -> List[int]:
+    min_val = column_data.min()
+    max_val = column_data.max()
+    bucket_size = (max_val - min_val) / num_buckets
+    boundries = []
+    boundry = min_val
+    while (len(boundries) + 1) < num_buckets:
+        boundry += bucket_size
+        boundries.append(round(boundry + 0.000001))
+
+    return boundries
+
+
+class BucketizedColumnStrategy(FeatureColumnStrategy):
+
+    def build_column(self) -> list:
+        num_feature_column = tf.feature_column.numeric_column(self.column_name)
+        column_data = self.data_model.get_dataframe()[self.column_name]
+
+        boundries = buckets = self.feature_config['buckets']
+        if type(buckets) is int:
+            boundries = bucketize_data(column_data, buckets)
+
+        print(boundries)
+        bucketized_column = tf.feature_column.bucketized_column(
+            source_column=num_feature_column,
+            boundaries=boundries
+        )
+
+        return [bucketized_column]
+
+    def validate_result(self):
+        for result in self.results:
+            assert result.__class__.__name__ == '_BucketizedColumn'
+
+    @staticmethod
+    def column_types() -> list:
+        return [FeatureColumnStrategy.BUCKETIZED_COLUMN]
+
+
 class FeatureColumnStrategyFactory:
     strategies = [
         NumericColumnStrategy,
         CategoricalColumnWithIdentity,
         CategoricalColumnWithVOCListStrategy,
         IndicatorColumnWithVOCListStrategy,
-        MultipleHotFeatureStrategy
+        MultipleHotFeatureStrategy,
+        BucketizedColumnStrategy
     ]  # type: List[FeatureColumnStrategy]
 
     @staticmethod
-    def get_strategy(column_name: str, column_type: str, data_model: DataModel):
-
+    def get_strategy(column_name: str, column_type: str, data_model: DataModel, feature_config: dict):
         for strategy in FeatureColumnStrategyFactory.strategies:
             if column_type in strategy.column_types():
-                return strategy(column_name, data_model)
+                column_feature_config = {}
+                if column_name in feature_config:
+                    column_feature_config = feature_config[column_name]
+
+                return strategy(column_name, data_model, column_feature_config)
 
         raise RuntimeError('feature column type ({}) not found for column {}'.format(column_type, column_name))
 

@@ -388,8 +388,10 @@ class TestFeatureColumnBuilder(unittest.TestCase):
             feature_columns={
                 'col1': FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
                 'col3': FeatureColumnStrategy.NUMERICAL_COLUMN,
-                'col4': FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST
-            }
+                'col4': FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
+                'col5': FeatureColumnStrategy.BUCKETIZED_COLUMN,
+            },
+            buckets={'col5': 2}
         )
 
         arti = mock.Mock('AIBuilder.AbstractAI')
@@ -410,7 +412,8 @@ class TestFeatureColumnBuilder(unittest.TestCase):
                     ['cat_one', 'cat_three', 'cat_four'],
                     ['cat_one', 'cat_two', 'cat_three'],
                     ['cat_two', 'cat_three'],
-                ]}
+                ],
+                'col5': [1, 2, 3, 4, 1, 2, 3, 4]}
 
         dataframe = pd.DataFrame(data=data)
         training_model = DataModel(dataframe)
@@ -440,6 +443,27 @@ class TestFeatureColumnBuilder(unittest.TestCase):
         self.assertEqual(col3_num_column.dtype, tf.float32)
 
         self.assertEqual(col4_indicator_column.name, 'col4_indicator')
+
+    def test_missing_bucket_config(self):
+        with self.assertRaises(AssertionError):
+            FeatureColumnBuilder(
+                feature_columns={
+                    'col1': FeatureColumnStrategy.BUCKETIZED_COLUMN,
+                },
+                feature_config={
+                    'wrong column': {}
+                }
+            )
+
+        with self.assertRaises(AssertionError):
+            FeatureColumnBuilder(
+                feature_columns={
+                    'col1': FeatureColumnStrategy.BUCKETIZED_COLUMN,
+                },
+                feature_config={
+                    'col1': {'wrong_config': 1}
+                }
+            )
 
 
 if __name__ == '__main__':

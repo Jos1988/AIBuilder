@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 from AIBuilder.AIFactory.FeatureColumnStrategies import NumericColumnStrategy, FeatureColumnStrategy, \
     CategoricalColumnWithVOCListStrategy, IndicatorColumnWithVOCListStrategy, FeatureColumnStrategyFactory, \
-    MultipleHotFeatureStrategy, CategoricalColumnWithIdentity
+    MultipleHotFeatureStrategy, CategoricalColumnWithIdentity, bucketize_data
 from AIBuilder.Data import DataModel
 
 
@@ -130,3 +130,34 @@ class TestFeatureColumnStrategyFactory(unittest.TestCase):
                                                              self.data_model)
 
         self.assertIsInstance(strategy, IndicatorColumnWithVOCListStrategy)
+
+
+class TestBucketizeData(unittest.TestCase):
+
+    def testBucketize2(self):
+        data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+        col = pd.Series(data)
+
+        boundries = bucketize_data(col, 2)
+        self.assertEqual([5], boundries)
+
+    def testBucketize3(self):
+        data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+        col = pd.Series(data)
+
+        boundries = bucketize_data(col, 3)
+        self.assertEqual([3, 6], boundries)
+
+    def testBucketize4(self):
+        data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+        col = pd.Series(data)
+
+        boundries = bucketize_data(col, 4)
+        self.assertEqual([2, 5, 7], boundries)
+
+    def testBucketize5(self):
+        data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+        col = pd.Series(data)
+
+        boundries = bucketize_data(col, 5)
+        self.assertEqual([2, 4, 5, 7], boundries)

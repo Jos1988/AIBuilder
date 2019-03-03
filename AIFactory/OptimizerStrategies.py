@@ -9,6 +9,9 @@ class OptimizerStrategy(ABC):
     ADAM_OPTIMIZER = 'adam_optimizer'
     ADAGRAD_OPTIMIZER = 'adagrad_optimizer'
     ADADELTA_OPTIMIZER = 'adadelta_optimizer'
+    NULL_OPTIMIZER = 'null_optimizer'
+
+    ALL_STRATEGIES = [GRADIENT_DESCENT_OPTIMIZER, ADAM_OPTIMIZER, ADAGRAD_OPTIMIZER, ADADELTA_OPTIMIZER, NULL_OPTIMIZER]
 
     def __init__(self, ml_model: AI, learning_rate: int, gradient_clipping: Optional[int] = None, **kwargs):
         self.gradient_clipping = None
@@ -75,6 +78,7 @@ class GradientDescentOptimizerStrategy(OptimizerStrategy):
 class AdagradOptimizerStrategy(OptimizerStrategy):
     """ Adagrad optimizer, Adaptive gradient learning rates, but they always decay.
     """
+
     def build_optimizer(self):
         kwargs = self.set_optimizer_kwargs()
         optimizer = tf.train.AdagradOptimizer(**kwargs)
@@ -94,6 +98,7 @@ class AdagradOptimizerStrategy(OptimizerStrategy):
 class AdaDeltaOptimizerStrategy(OptimizerStrategy):
     """ AdaDelta optimizer, adaptive learning rates without decay.
     """
+
     def build_optimizer(self):
         kwargs = self.set_optimizer_kwargs()
         optimizer = tf.train.AdadeltaOptimizer(**kwargs)
@@ -113,6 +118,7 @@ class AdaDeltaOptimizerStrategy(OptimizerStrategy):
 class AdamOptimizerStrategy(OptimizerStrategy):
     """ Adam optimizer, adaptive momentum and adaptive learning rates.
     """
+
     def build_optimizer(self):
         kwargs = self.set_optimizer_kwargs()
         optimizer = tf.train.AdamOptimizer(**kwargs)
@@ -129,12 +135,28 @@ class AdamOptimizerStrategy(OptimizerStrategy):
         return OptimizerStrategy.ADAM_OPTIMIZER
 
 
+class NullOptimizerStrategy(OptimizerStrategy):
+    """ null optimizer
+    """
+
+    def build_optimizer(self):
+        return None
+
+    def validate_result(self):
+        assert self.result is None
+
+    @staticmethod
+    def optimizer_type() -> str:
+        return OptimizerStrategy.NULL_OPTIMIZER
+
+
 class OptimizerStrategyFactory:
     strategies = [
         GradientDescentOptimizerStrategy,
         AdamOptimizerStrategy,
         AdaDeltaOptimizerStrategy,
-        AdagradOptimizerStrategy
+        AdagradOptimizerStrategy,
+        NullOptimizerStrategy
     ]  # type: List[OptimizerStrategy]
 
     @staticmethod

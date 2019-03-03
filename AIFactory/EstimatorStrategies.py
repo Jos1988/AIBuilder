@@ -9,8 +9,9 @@ class EstimatorStrategy(ABC):
     LINEAR_CLASSIFIER = 'linear_classifier'
     DNN_REGRESSOR = 'dnn_regressor'
     DNN_CLASSIFIER = 'dnn_classifier'
+    BOOSTED_TREES_CLASSIFIER = 'boosted_trees_classifier'
 
-    ALL_STRATEGIES = [LINEAR_CLASSIFIER, LINEAR_REGRESSOR, DNN_REGRESSOR, DNN_CLASSIFIER]
+    ALL_STRATEGIES = [LINEAR_CLASSIFIER, LINEAR_REGRESSOR, DNN_REGRESSOR, DNN_CLASSIFIER, BOOSTED_TREES_CLASSIFIER]
 
     def __init__(self, ml_model: AI, **kwargs):
         self.ML_Model = ml_model
@@ -147,12 +148,45 @@ class DNNClassifier(EstimatorStrategy):
         return EstimatorStrategy.DNN_CLASSIFIER
 
 
+class BoostedTreesClassifier(EstimatorStrategy):
+
+    def build_estimator(self) -> tf.feature_column:
+        kwargs = {'feature_columns': self.ML_Model.training_data.get_tf_feature_columns(),
+                  # 'optimizer': self.ML_Model.optimizer,
+                  'model_dir': self.get_model_dir()}
+
+        kwargs.update(self.kwargs)
+        self.validate_kwargs(kwargs)
+        estimator = tf.estimator.BoostedTreesClassifier(**kwargs)
+
+        return estimator
+
+    @staticmethod
+    def kwarg_requirements() -> dict:
+        return {'n_batches_per_layer': int}
+
+    def validate_kwargs(self, kwargs):
+        kwarg_min_requirements = self.kwarg_requirements()
+        for key, data_type in kwarg_min_requirements.items():
+            assert key in kwargs, 'BoostedTreesClassifier missing requires argument: {}.'.format(key)
+            assert type(kwargs[key]) is data_type, 'BoostedTreesClassifier argument for {} must be {}, {} given ({})' \
+                .format(key, data_type, type(kwargs[key]), kwargs[key])
+
+    def validate_result(self):
+        assert isinstance(self.result, tf.estimator.BoostedTreesClassifier)
+
+    @staticmethod
+    def estimator_type() -> str:
+        return EstimatorStrategy.BOOSTED_TREES_CLASSIFIER
+
+
 class EstimatorStrategyFactory:
     strategies = [
         LinearRegressorStrategy,
         LinearClassifier,
         DNNRegressorStrategy,
-        DNNClassifier
+        DNNClassifier,
+        BoostedTreesClassifier
     ]  # type: List[EstimatorStrategy]
 
     @staticmethod

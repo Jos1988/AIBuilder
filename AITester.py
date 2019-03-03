@@ -74,7 +74,11 @@ class BinaryClassificationEvaluator(Evaluator):
     def load_predictions_from_predictor(predictor):
         predictions = []
         for p in predictor:
-            predictions.append(p['predictions'][0])
+            # print(p)
+            # regressor:
+            # predictions.append(p['predictions'][0])
+            # classifier:
+            predictions.append(p['logistic'][0])
         return predictions
 
 

@@ -375,17 +375,10 @@ class NamingSchemeBuilder(Builder):
 class OptimizerBuilder(Builder):
     LEARNING_RATE = 'learning_rate'
 
-    valid_optimizer_types = [
-        OptimizerStrategy.GRADIENT_DESCENT_OPTIMIZER,
-        OptimizerStrategy.ADAM_OPTIMIZER,
-        OptimizerStrategy.ADAGRAD_OPTIMIZER,
-        OptimizerStrategy.ADADELTA_OPTIMIZER
-    ]
-
     def __init__(self, optimizer_type: str, learning_rate: float, gradient_clipping: Optional[float] = None,
                  kwargs: dict = None):
         super().__init__()
-        self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, self.valid_optimizer_types)
+        self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, OptimizerStrategy.ALL_STRATEGIES)
         self.learning_rate = DataTypeSpecification('learning_rate', learning_rate, float)
 
         self.gradient_clipping = NullSpecification('gradient_clipping')
@@ -524,18 +517,22 @@ class MetadataBuilder(Builder):
 
 class FeatureColumnBuilder(Builder):
 
-    def __init__(self, feature_columns: dict):
+    def __init__(self, feature_columns: dict, feature_config: dict = None):
         super().__init__()
-
+        self.feature_config = feature_config
         self.feature_columns = FeatureColumnsSpecification('feature_columns', [], FeatureColumnStrategy.ALL_COLUMNS)
 
         for name, type in feature_columns.items():
+            if type is FeatureColumnStrategy.BUCKETIZED_COLUMN:
+                assert name in feature_config, 'Missing configuration for bucketized column: {}.'.format(name)
+                assert 'buckets' in self.feature_config[name], \
+                    'Missing buckets configuration for bucketized column: {}.'.format(name)
+
             self.add_feature_column(name=name, column_type=type)
 
     @property
     def dependent_on(self) -> list:
         return [self.DATA_MODEL, self.SCRUBBER]
-
     # requires scrubbed data in order to generate categories for categorical columns.
 
     @property
@@ -596,8 +593,8 @@ class FeatureColumnBuilder(Builder):
         for feature_column_info in self.feature_columns():
             column_strategy = FeatureColumnStrategyFactory.get_strategy(feature_column_info['name'],
                                                                         feature_column_info['type'],
-                                                                        data_model)
-
+                                                                        data_model,
+                                                                        self.feature_config)
             feature_columns = column_strategy.build()
             tf_feature_columns = feature_columns + tf_feature_columns
 
