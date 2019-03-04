@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
+import tensorflow as tf
 
 
 class Specification(ABC):
@@ -52,14 +53,14 @@ class DataTypeSpecification(Specification):
         super().__init__(name, value)
         self.data_type = data_type
 
-    # Have this function go recursively through any lists and dicts it finds, with unit test :).
     def describe(self):
         description = self.value
 
         if self.data_type is dict:
             description = {}
             for label, value in self.value.items():
-                if is_primitive(label) and is_primitive(value):
+                # todo: check on abstract class in isinstance and use multiple inheritance to implement is.
+                if is_primitive(label) and (is_primitive(value) or isinstance(value, ConfigDescriber)):
                     description[label] = value
 
         if self.data_type is list:
@@ -129,3 +130,17 @@ class FeatureColumnsSpecification(Specification):
     def add_feature_column(self, name: str, column_type: str):
         new_column_data = {'name': name, 'type': column_type}
         self.value.append(new_column_data)
+
+
+# todo: move implementation from abstraction module?
+class ConfigDescriber(tf.estimator.RunConfig):
+    description: str
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __str__(self):
+        return str(self.description)
+
+    def __repr__(self):
+        return str(self.description)

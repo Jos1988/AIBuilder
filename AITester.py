@@ -148,6 +148,7 @@ class AITester(AbstractAITester):
         self.summizer.log('finished training', None)
 
     def evaluate_AI(self):
+        # todo move reporting logic to listener/observer
         self.summizer.log('start evaluation', None)
         self.results = self.AI.evaluate()
         self.run_evaluators()

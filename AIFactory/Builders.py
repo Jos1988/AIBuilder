@@ -4,7 +4,7 @@ from copy import deepcopy
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategyFactory, OptimizerStrategy
-from AIBuilder.AIFactory.Specifications import Specification
+from AIBuilder.AIFactory.Specifications import Specification, ConfigDescriber
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
@@ -168,16 +168,6 @@ class DataSplitterBuilder(Builder):
         else:
             raise RuntimeError('Unknown data_source ({}) found in data splitter builder.'.format(self.data_source()))
         return data
-
-
-class ConfigDescriber(tf.estimator.RunConfig):
-    description: str
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def __str__(self):
-        return str(self.description)
 
 
 class EstimatorBuilder(Builder):
