@@ -108,20 +108,16 @@ class AITester(AbstractAITester):
         if evaluators is not None:
             self.evaluators = evaluators
 
-    def run_AI_test(self, ai: AbstractAI):
+    def logModelNotUnique(self):
+        self.console_printer.line('')
+        self.console_printer.separate()
+        self.console_printer.line('AI already evaluated')
+        self.print_description()
+        self.console_printer.separate()
+
+    def loadModel(self, ai):
         self.set_AI(ai)
         self.description_hash = self.stable_hash_description(ai.description)
-
-        if self.is_unique():
-            self.train_AI()
-            self.evaluate_AI()
-        else:
-            self.console_printer.line('')
-            self.console_printer.separate()
-            self.console_printer.line('AI already evaluated')
-            self.print_description()
-
-            self.console_printer.separate()
 
     def set_report_printer(self):
         report = self.open_report_file('a')
