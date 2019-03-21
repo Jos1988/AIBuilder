@@ -1,6 +1,6 @@
 from unittest import mock
 from AIBuilder.AI import AI, AbstractAI
-from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy
+from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy, EstimatorStrategyFactory
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategy
 from AIBuilder.Data import DataModel
@@ -95,7 +95,7 @@ class TestEstimatorBuilder(unittest.TestCase):
         invalid_estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
         invalid_estimator_builder.estimator_type = TypeSpecification(name=EstimatorBuilder.ESTIMATOR,
                                                                      value='invalid',
-                                                                     valid_types=EstimatorBuilder.valid_estimator_types)
+                                                                     valid_types=EstimatorStrategy.ALL_STRATEGIES)
 
         valid_estimator_builder = EstimatorBuilder(EstimatorStrategy.LINEAR_REGRESSOR)
 
@@ -123,8 +123,8 @@ class TestEstimatorBuilder(unittest.TestCase):
         arti.get_log_dir.return_value = 'path/to/log'
         arti.get_project_name = mock.Mock()
         arti.get_project_name.return_value = 'project_name'
-        arti.name = mock.Mock()
-        arti.name.return_value = 'ai_name'
+        arti.get_name = mock.Mock()
+        arti.get_name.return_value = 'ai_name'
         arti.set_estimator = mock.Mock()
         arti.optimizer = mock_optimizer
         arti.training_data = mock_data_model
@@ -193,8 +193,8 @@ class TestNamingScheme(unittest.TestCase):
         self.arti.get_log_dir.return_value = '../../../builder projects/log'
         self.arti.get_project_name = mock.Mock()
         self.arti.set_name = mock.Mock()
-        self.arti.name = mock.Mock()
-        self.arti.name.return_value = None
+        self.arti.get_name = mock.Mock()
+        self.arti.get_name.return_value = None
 
     @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
     def test_generate_name(self, walk):
@@ -391,7 +391,7 @@ class TestFeatureColumnBuilder(unittest.TestCase):
                 'col4': FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
                 'col5': FeatureColumnStrategy.BUCKETIZED_COLUMN,
             },
-            buckets={'col5': 2}
+            feature_config={'col5': {'buckets': 2}}
         )
 
         arti = mock.Mock('AIBuilder.AbstractAI')
@@ -413,7 +413,7 @@ class TestFeatureColumnBuilder(unittest.TestCase):
                     ['cat_one', 'cat_two', 'cat_three'],
                     ['cat_two', 'cat_three'],
                 ],
-                'col5': [1, 2, 3, 4, 1, 2, 3, 4]}
+                'col5': [1, 2, 3, 4, 1, 2, 3, 4, 3, 4]}
 
         dataframe = pd.DataFrame(data=data)
         training_model = DataModel(dataframe)
@@ -430,9 +430,10 @@ class TestFeatureColumnBuilder(unittest.TestCase):
         builder.build(arti)
 
         feature_columns = training_model.get_tf_feature_columns()
-        col1_cat_column = feature_columns[2]
-        col3_num_column = feature_columns[1]
-        col4_indicator_column = feature_columns[0]
+        col1_cat_column = feature_columns[3]
+        col3_num_column = feature_columns[2]
+        col4_indicator_column = feature_columns[1]
+        col5_bucketized_col = feature_columns[0]
 
         arti.set_training_data.assert_called_once()
 
@@ -443,6 +444,7 @@ class TestFeatureColumnBuilder(unittest.TestCase):
         self.assertEqual(col3_num_column.dtype, tf.float32)
 
         self.assertEqual(col4_indicator_column.name, 'col4_indicator')
+        self.assertEqual(col5_bucketized_col.name, 'col5_bucketized')
 
     def test_missing_bucket_config(self):
         with self.assertRaises(AssertionError):
