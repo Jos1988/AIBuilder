@@ -122,7 +122,6 @@ class AIFactory:
     builder_permutations: List[List[Builder]]
 
     def __init__(self, builders: List[Builder],  project_name: str, log_dir: str):
-        # todo: replace this with event dispatching system for dispatching console messages etc.
         self.console_printer = FactoryPrinter(ConsolePrintStrategy())
         self.sorter = BuilderSorter()
         self.project_name = project_name
@@ -130,11 +129,11 @@ class AIFactory:
         self.permutation_generator = PermutationGenerator()
         self.builder_permutations = self.permutation_generator.generate(builders=builders)
 
-    def count_remaining_ai(self):
+    def count_remaining_models(self):
         return len(self.builder_permutations)
 
     def has_next_ai(self):
-        return self.count_remaining_ai() is not 0
+        return self.count_remaining_models() is not 0
 
     def create_next_ai(self):
         next_builder_permutation = self.builder_permutations.pop()
@@ -143,27 +142,23 @@ class AIFactory:
 
     def create_AI(self, builders: list, ai_name: str = None) -> AbstractAI:
         self.validate_builders(builders)
-        artificial_intelligence = AI(self.project_name, self.log_dir, ai_name)
+        ml_model = AI(self.project_name, self.log_dir, ai_name)
 
         builders_sorted = self.sorter.sort(builders)
 
         ai_description = {}
         for builder in builders_sorted:
             self.console_printer.line('running: ' + builder.__class__.__name__)
-            builder.build(artificial_intelligence)
+            builder.build(ml_model)
 
             builder_description = builder.describe()
             ai_description[builder.builder_type] = builder_description
 
-        artificial_intelligence.description = ai_description
+        ml_model.description = ai_description
 
-        return artificial_intelligence
+        return ml_model
 
     @staticmethod
     def validate_builders(builders: list):
         for builder in builders:
             builder.validate()
-
-    def print_remaining_ai(self):
-        count = self.count_remaining_ai()
-        self.console_printer.print_remaining_ai(count)

@@ -191,7 +191,6 @@ class BucketizedColumnStrategy(FeatureColumnStrategy):
         if type(buckets) is int:
             boundries = bucketize_data(column_data, buckets)
 
-        print(boundries)
         bucketized_column = tf.feature_column.bucketized_column(
             source_column=num_feature_column,
             boundaries=boundries

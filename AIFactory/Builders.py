@@ -231,7 +231,7 @@ class EstimatorBuilder(Builder):
 
     @staticmethod
     def render_model_dir(ai) -> str:
-        return ai.get_log_dir() + '/' + ai.get_project_name() + '/tensor_board/' + ai.get_name()
+        return ai.get_log_dir() + '/' + ai.get_project_name() + '/tensor_board/' + ai.name()
 
 
 class InputFunctionBuilder(Builder):

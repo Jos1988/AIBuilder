@@ -9,8 +9,8 @@ class AITesterTest(TestCase):
         self.ai = mock.Mock('test_AITester.AbstractAI')
         self.ai.description = {'builder_1': {'ingredient_1': 1}}
         self.ai.train = mock.Mock(name='train')
-        self.ai.get_name = mock.Mock(name='get_name')
-        self.ai.get_name.return_value = 'name'
+        self.ai.name = mock.Mock(name='get_name')
+        self.ai.name.return_value = 'name'
         self.ai.get_project_name = mock.Mock(name='get_project_name')
         self.ai.get_project_name.return_value = 'project'
         self.ai.get_log_dir = mock.Mock(name='get_log_dir')
@@ -19,7 +19,6 @@ class AITesterTest(TestCase):
         summizer = mock.patch('AITester.Summizer')
         summizer.log = mock.Mock(name='log')
         summizer.summize = mock.Mock(name='summize')
-        summizer.reset = mock.Mock(name='reset')
 
         self.ai_tester = AITester(summizer=summizer)
         self.ai_tester.AI = self.ai
@@ -30,11 +29,7 @@ class AITesterTest(TestCase):
         self.assertEqual(2, self.ai_tester.summizer.log.call_count)
 
     def test_evaluation(self):
-        self.ai_tester.log_testing_report = mock.Mock()
-        self.ai_tester.summizer.summize = mock.Mock()
-        self.ai_tester.summizer.reset = mock.Mock()
         self.ai_tester.determine_test_time()
-        self.ai_tester.report_printer = mock.Mock()
         self.ai.evaluate = mock.Mock()
         self.ai.evaluate.return_value = {'result': 'test_dir'}
 
@@ -43,48 +38,6 @@ class AITesterTest(TestCase):
         self.assertEqual(2, self.ai_tester.summizer.log.call_count)
         self.ai_tester.create_model_dir_path = mock.Mock()
         self.ai.evaluate.assert_called_once()
-        self.ai_tester.log_testing_report.assert_called_once()
-        self.ai_tester.summizer.summize.assert_called_once()
-
-    def test_log_testing_report(self):
-        open = mock.mock_open()
-        self.ai_tester.results = {'a': 'a'}
-        self.ai_tester.test_time = 'testTime'
-        file = mock.Mock()
-        file.write = mock.Mock()
-        open.return_value = file
-        with mock.patch('AIBuilder.AITester.open', open, create=True):
-            self.ai_tester.set_report_printer()
-            self.ai_tester.log_testing_report()
-            # self.ai_tester.report_printer.print_results(self.ai_tester.results)
-            open.assert_called_once_with('path/project/ai_reports.txt', mode='a')
-            print_name = mock.call('--- AI: ' + 'name' + ' ---')
-            print_time = mock.call('--- time: ' + 'testTime' + ' ---')
-            print_report = mock.call('' + 'a' + ': ' + str('a'))
-            print_newline = mock.call('')
-            print_builder = mock.call('builder_1')
-            print_spec = mock.call(' - ingredient_1: 1')
-            file.write.assert_has_calls(
-                [print_name, print_time, print_report, print_newline, print_builder, print_spec],
-                any_order=True)
-
-    def test_is_unique(self):
-        open = mock.mock_open()
-        file = ['line1', 'description: 123', 'line3']
-        open.return_value = file
-
-        with mock.patch('AIBuilder.AITester.open', open, create=True):
-            result = self.ai_tester.is_unique()
-            self.assertTrue(result)
-
-    def test_is_not_unique(self):
-        open = mock.mock_open()
-        file = ['line1', 'description: 4015285680072685342', 'line3']
-        open.return_value = file
-
-        with mock.patch('AIBuilder.AITester.open', open, create=True):
-            result = self.ai_tester.is_unique()
-            self.assertTrue(result)
 
     def test_stable_hash_description(self):
         result_hash = '986514f2494f256f444d9652abf742fc'

@@ -123,8 +123,8 @@ class TestEstimatorBuilder(unittest.TestCase):
         arti.get_log_dir.return_value = 'path/to/log'
         arti.get_project_name = mock.Mock()
         arti.get_project_name.return_value = 'project_name'
-        arti.get_name = mock.Mock()
-        arti.get_name.return_value = 'ai_name'
+        arti.name = mock.Mock()
+        arti.name.return_value = 'ai_name'
         arti.set_estimator = mock.Mock()
         arti.optimizer = mock_optimizer
         arti.training_data = mock_data_model
@@ -193,8 +193,8 @@ class TestNamingScheme(unittest.TestCase):
         self.arti.get_log_dir.return_value = '../../../builder projects/log'
         self.arti.get_project_name = mock.Mock()
         self.arti.set_name = mock.Mock()
-        self.arti.get_name = mock.Mock()
-        self.arti.get_name.return_value = None
+        self.arti.name = mock.Mock()
+        self.arti.name.return_value = None
 
     @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
     def test_generate_name(self, walk):

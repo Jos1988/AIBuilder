@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 
 from AIBuilder import AI
 from AIBuilder.AI import AbstractAI
-from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, TesterPrinter, ReportPrintStrategy
+from AIBuilder.AIFactory.Printing import PrintStrategy
 from AIBuilder.Summizer import Summizer
 from datetime import datetime
 import hashlib
@@ -100,41 +100,27 @@ class AITester(AbstractAITester):
         self.summizer = summizer
         self.test_time = None
         self.results = {}
-        self.console_print_strategy = ConsolePrintStrategy()
-        self.console_printer = TesterPrinter(self.console_print_strategy)
         self.description_hash = None
         self.report_printer = None
         self.evaluators = []
         if evaluators is not None:
             self.evaluators = evaluators
 
-    def logModelNotUnique(self):
-        self.console_printer.line('')
-        self.console_printer.separate()
-        self.console_printer.line('AI already evaluated')
-        self.print_description()
-        self.console_printer.separate()
-
     def loadModel(self, ai):
         self.set_AI(ai)
         self.description_hash = self.stable_hash_description(ai.description)
 
-    def set_report_printer(self):
-        report = self.open_report_file('a')
-        report_print_strategy = ReportPrintStrategy(report=report)
-
-        self.report_printer = TesterPrinter(report_print_strategy)
-
     def set_AI(self, ai: AbstractAI):
         self.AI = ai
-        self.set_report_printer()
 
     def is_unique(self) -> bool:
-        report = self.open_report_file('r')
+        report = self.get_report_file('r')
         for line in report:
             if -1 is not line.find(str(self.description_hash)):
+                report.close()
                 return False
 
+        report.close()
         return True
 
     def train_AI(self):
@@ -144,19 +130,10 @@ class AITester(AbstractAITester):
         self.summizer.log('finished training', None)
 
     def evaluate_AI(self):
-        # todo move reporting logic to listener/observer
         self.summizer.log('start evaluation', None)
         self.results = self.AI.evaluate()
         self.run_evaluators()
-
-        self.print_description()
-        self.print_results()
-        self.log_testing_report()
-        self.report_printer.output.close_report()
-
         self.summizer.log('finished evaluation', None)
-        self.summizer.summize(self.console_print_strategy)
-        self.summizer.reset()
 
     def run_evaluators(self):
         for evaluator in self.evaluators:
@@ -164,25 +141,8 @@ class AITester(AbstractAITester):
             evaluator_results = evaluator.evaluate()
             self.results.update(evaluator_results)
 
-    def print_results(self):
-        self.console_printer.separate()
-        self.validate_results_set()
-        self.console_printer.print_results(self.results)
-
-    def print_description(self):
-        self.console_printer.separate()
-        self.console_printer.print_ai_description(
-            ai=self.AI, time_stamp=self.test_time, ai_hash=self.description_hash)
-
-    def log_testing_report(self):
-        self.report_printer.line('')
-        self.report_printer.print_ai_description(
-            ai=self.AI, time_stamp=self.test_time, ai_hash=self.description_hash)
-        self.report_printer.line('')
-        self.report_printer.print_results(self.results)
-        self.report_printer.separate()
-        self.summizer.summize(self.report_printer.output)
-        self.report_printer.separate()
+    def summizeTime(self, print_strategy: PrintStrategy):
+        self.summizer.summize(print_strategy)
 
     def validate_results_set(self):
         assert type(self.results) is dict, 'Test results not set in AI tester.'
@@ -193,7 +153,7 @@ class AITester(AbstractAITester):
     def validate_test_time(self):
         assert type(self.test_time) is str, 'Test time not set in AITester.'
 
-    def open_report_file(self, mode: str):
+    def get_report_file(self, mode: str):
         path = self.AI.get_log_dir() + '/' + self.AI.get_project_name() + '/ai_reports.txt'
         report = open(path, mode=mode)
         return report
