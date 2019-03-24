@@ -99,7 +99,6 @@ class AITester(AbstractAITester):
     def __init__(self, summizer: Summizer, evaluators: List[Evaluator] = None):
         self.summizer = summizer
         self.test_time = None
-        self.results = {}
         self.description_hash = None
         self.report_printer = None
         self.evaluators = []
@@ -131,7 +130,7 @@ class AITester(AbstractAITester):
 
     def evaluate_AI(self):
         self.summizer.log('start evaluation', None)
-        self.results = self.AI.evaluate()
+        self.AI.evaluate()
         self.run_evaluators()
         self.summizer.log('finished evaluation', None)
 
@@ -139,13 +138,13 @@ class AITester(AbstractAITester):
         for evaluator in self.evaluators:
             evaluator.load_ml_model(self.AI)
             evaluator_results = evaluator.evaluate()
-            self.results.update(evaluator_results)
+            self.AI.results.update(evaluator_results)
 
     def summizeTime(self, print_strategy: PrintStrategy):
         self.summizer.summize(print_strategy)
 
     def validate_results_set(self):
-        assert type(self.results) is dict, 'Test results not set in AI tester.'
+        assert type(self.AI.results) is dict, 'Test results not set in AI tester.'
 
     def determine_test_time(self):
         self.test_time = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')

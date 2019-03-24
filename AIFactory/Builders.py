@@ -185,6 +185,7 @@ class EstimatorBuilder(Builder):
         super().__init__()
         self.set_estimator(estimator_type)
         if config_kwargs is not None:
+            self.config_kwargs = DataTypeSpecification('config_kwargs', config_kwargs, dict)
             kwargs = self.set_config(config_kwargs, kwargs)
 
         self.kwargs = NullSpecification('kwargs')
@@ -369,7 +370,7 @@ class OptimizerBuilder(Builder):
                  kwargs: dict = None):
         super().__init__()
         self.optimizer_type = TypeSpecification('optimizer_type', optimizer_type, OptimizerStrategy.ALL_STRATEGIES)
-        self.learning_rate = DataTypeSpecification('learning_rate', learning_rate, float)
+        self.learning_rate = DataTypeSpecification('optimizer_learning_rate', learning_rate, float)
 
         self.gradient_clipping = NullSpecification('gradient_clipping')
         if gradient_clipping is not None:

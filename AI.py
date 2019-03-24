@@ -9,6 +9,7 @@ class AbstractAI(ABC):
 
     def __init__(self):
         self.description = 'description not set.'
+        self.results = {}
 
     @abstractmethod
     def train(self):
@@ -86,6 +87,7 @@ class AI(AbstractAI):
     evaluation_fn: Callable
     estimator: tf.estimator
     optimizer: tf.train.Optimizer
+    results: dict
 
     def __init__(self, project_name: str, log_dir: str, name: str = None):
         super().__init__()
@@ -101,11 +103,11 @@ class AI(AbstractAI):
 
         self.estimator.train(input_fn=self.training_fn)
 
-    def evaluate(self) -> dict:
+    def evaluate(self):
         assert callable(self.evaluation_fn), 'Evaluation input Callable not set on AI: {}'\
             .format(self.__class__.__name__)
 
-        return self.estimator.evaluate(input_fn=self.evaluation_fn)
+        self.results = self.estimator.evaluate(input_fn=self.evaluation_fn)
 
     def estimate(self):
         pass

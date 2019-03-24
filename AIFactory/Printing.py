@@ -57,7 +57,7 @@ class Printer:
     def line(self, text):
         self.output.print_new_line(text)
 
-    def separate(self,):
+    def separate(self):
         self.line('==================================================================================================')
 
 
