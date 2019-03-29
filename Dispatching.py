@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import List
 
 from AIBuilder import AITester
 from AIBuilder.AIFactory import AIFactory
-from AIBuilder.AIFactory.Logging import MetaLogger
+from AIBuilder.AIFactory.Logging import MetaLogger, CSVReader
 from AIBuilder.AIFactory.Printing import TesterPrinter, ConsolePrintStrategy, ReportPrintStrategy, \
     FactoryPrinter
 
@@ -149,11 +150,38 @@ class PreRunObserver(Observer):
         assert type(event) is TesterEvent
         event: TesterEvent
 
-        log_values = event.session.session_data['meta_logging']['attributes'] + event.session.session_data['meta_logging']['metrics']
-        path = event.session.log_dir + '/' + event.session.project_name + '/meta_log.csv'
-        discrimination = event.session.session_data['meta_logging']['discriminator']
-        meta_logger = MetaLogger(log_values=log_values, log_file_path=path, discrimination_value=discrimination)
+        log_file_path = Path(self.get_path(event))
+
+        if log_file_path.is_file():
+            self.check_logfile_compatible(log_file_path, event=event)
+
+        meta_logger = self.load_meta_logger(event, path=log_file_path)
         event.session.meta_logger = meta_logger
+
+    def check_logfile_compatible(self, log_file_path: Path, event: TesterEvent):
+        attributes = event.session.session_data['meta_logging']['attributes']
+        metrics = event.session.session_data['meta_logging']['metrics']
+        reader = CSVReader(
+            attribute_names=attributes,
+            metric_names=metrics,
+            discriminator=event.session.session_data['meta_logging']['discriminator']
+        )
+
+        if False is reader.check_compatible(log_file_path):
+            raise AssertionError('Meta log file not compatible, expecting following headers: {}'.format(reader.all_names))
+
+    def get_path(self, event) -> str:
+        return event.session.log_dir + '/' + event.session.project_name + '/meta_log.csv'
+
+    def load_meta_logger(self, event, path: Path):
+        meta_logger = MetaLogger(
+            log_attributes=event.session.session_data['meta_logging']['attributes'],
+            log_metrics=event.session.session_data['meta_logging']['metrics'],
+            discrimination_value=event.session.session_data['meta_logging']['discriminator'],
+            log_file_path=path
+        )
+
+        return meta_logger
 
 
 class PostRunObserver(Observer):
@@ -165,7 +193,6 @@ class PostRunObserver(Observer):
     def execute(self, event: Event):
         assert type(event) is TesterEvent
         event: TesterEvent
-
         event.session.meta_logger.save_to_csv()
 
 
