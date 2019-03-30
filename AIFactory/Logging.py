@@ -109,11 +109,11 @@ class RecordCollection:
                 self.record_groups.remove(group)
 
     def __len__(self):
-        len = 0
+        length = 0
         for group in self.record_groups:
-            len += len(group)
+            length += len(group)
 
-        return len
+        return length
 
 
 class CSVReader:
@@ -143,11 +143,22 @@ class CSVReader:
         csv_reader = csv.DictReader(file)
         loaded_records = RecordCollection(self.attribute_names, self.metric_names, self.discriminator)
         for csv_record in csv_reader:
+            if not self.is_row_record(csv_record):
+                continue
+
             record = self.load_record(csv_record)
             loaded_records.add(record)
 
         file.close()
         return loaded_records
+
+    @staticmethod
+    def is_row_record(values: dict) -> bool:
+        for key, value in values.items():
+            if value is '':
+                return False
+
+        return True
 
     def load_record(self, csv_record):
         attributes = {}
@@ -179,7 +190,6 @@ class CSVConverter:
 
             all_label_values = []
             for record in group:
-                print(record.metrics[label])
                 all_label_values.append(float(record.metrics[label]))
 
             average = sum(all_label_values) / len(all_label_values)
@@ -211,7 +221,6 @@ class CSVConverter:
                 self.writeRecord(record)
             self.write_group_summary(group)
             self.write_empty_row(group[0])
-
 
     def writeMetaLog(self):
         self.writer.writeheader()

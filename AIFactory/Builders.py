@@ -105,7 +105,7 @@ class DataBuilder(Builder):
 
         self.load_file(loader)
 
-        columns = self.data_columns()
+        columns = self.data_columns().copy()
         columns.append(self.target_column())
         loader.filter_columns(set(columns))
 
