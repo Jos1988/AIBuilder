@@ -27,7 +27,7 @@ class TypeSpecification(Specification):
         self.valid_types = valid_types
 
     def validate(self):
-         assert self.value in self.valid_types, 'Value {} must be in {}, {} given' \
+        assert self.value in self.valid_types, 'Value {} must be in {}, {} given' \
             .format(self.name, self.valid_types, self.value)
 
 
@@ -74,6 +74,21 @@ class DataTypeSpecification(Specification):
     def validate(self):
         assert type(self.value) is self.data_type, 'Value \'{}\' must be of type {}, {} given' \
             .format(self.name, self.data_type, type(self.value))
+
+
+class PrefixedDictSpecification(DataTypeSpecification):
+    def __init__(self, name: str, prefix: str, value):
+        super().__init__(name, value, dict)
+        self.prefix = prefix
+
+    def describe(self):
+        description = super().describe()
+        prefixed_description = {}
+        for label, value in description.items():
+            prefixed_label = self.prefix + '_' + label
+            prefixed_description[prefixed_label] = value
+
+        return prefixed_description
 
 
 class IsCallableSpecification(Specification):

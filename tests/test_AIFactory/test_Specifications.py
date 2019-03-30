@@ -2,7 +2,8 @@ import unittest
 from unittest import mock
 
 from AIBuilder.AIFactory.Specifications import TypeSpecification, RangeSpecification, \
-    DataTypeSpecification, IsCallableSpecification, NullSpecification, Descriptor, FeatureColumnsSpecification
+    DataTypeSpecification, IsCallableSpecification, NullSpecification, Descriptor, FeatureColumnsSpecification, \
+    PrefixedDictSpecification
 
 
 class TestTypeSpecification(unittest.TestCase):
@@ -85,6 +86,27 @@ class TestDataTypeSpecification(unittest.TestCase):
         self.data_type_specification = DataTypeSpecification('test_dir', {0: 'test', callMe: 1}, dict)
         description = self.data_type_specification.describe()
         self.assertEqual({0: 'test'}, description)
+
+
+class TestPrefixedDictSpecification(unittest.TestCase):
+
+    def setUp(self) -> None:
+        data = {
+            'test_dir': 'one',
+            'b': 1,
+            'c': 0.1,
+        }
+
+        self.data_type_specification = PrefixedDictSpecification('test_dir', 'test', data)
+
+    def test_valid(self):
+        self.data_type_specification.validate()
+
+    def test_description(self):
+        description = self.data_type_specification.describe()
+        self.assertEqual('one', description['test_test_dir'])
+        self.assertEqual(1, description['test_b'])
+        self.assertEqual(0.1, description['test_c'])
 
 
 class TestIsCallableSpecification(unittest.TestCase):

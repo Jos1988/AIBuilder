@@ -4,7 +4,7 @@ from copy import deepcopy
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategyFactory, OptimizerStrategy
-from AIBuilder.AIFactory.Specifications import Specification, ConfigDescriber
+from AIBuilder.AIFactory.Specifications import Specification, ConfigDescriber, PrefixedDictSpecification
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
@@ -247,11 +247,13 @@ class InputFunctionBuilder(Builder):
 
         # todo: do not print training kwargs, when saving description, some of them are objects,
         #  for example x and y are dataframes.
-        self.train_kwargs = DataTypeSpecification('train_kwargs', train_kwargs, dict)
+        self.train_kwargs = train_kwargs
+        self.train_kwargs_descr = PrefixedDictSpecification('train_kwargs', 'train', train_kwargs)
 
         self.evaluation_fn_name = TypeSpecification('evaluation function', evaluation_fn, self.VALID_FN_NAMES)
         # todo: idem.
-        self.evaluation_kwargs = DataTypeSpecification('evaluation_kwargs', evaluation_kwargs, dict)
+        self.evaluation_kwargs = evaluation_kwargs
+        self.evaluation_kwargs_descr = PrefixedDictSpecification('evaluation_kwargs', 'eval', evaluation_kwargs)
 
         self.fn_holder = InputFunctionHolder
 
@@ -292,9 +294,9 @@ class InputFunctionBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs())
+        train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs)
         evaluation_function = self.assign_fn(neural_net.evaluation_data, self.evaluation_fn_name(),
-                                             self.evaluation_kwargs())
+                                             self.evaluation_kwargs)
 
         neural_net.set_training_fn(train_function)
         neural_net.set_evaluation_fn(evaluation_function)

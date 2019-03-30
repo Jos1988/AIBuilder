@@ -279,7 +279,7 @@ class MetaLogger:
 
     @staticmethod
     def check_value(log_value, value):
-        assert len(value) is 1, 'multiple or no result found for "{}": {}'.format(log_value, value)
+        assert len(value) is 1, 'multiple or no result found for "{}", results: {}'.format(log_value, value)
         value = value.pop()
 
         if type(value).__module__ is np.__name__:
@@ -294,8 +294,9 @@ class MetaLogger:
         results = []
         assert type(data) is dict, 'data must be a dict, {} given.'.format(data)
         for key, value in data.items():
-            if key is find_value and type(value) is not dict:
+            if key == find_value and type(value) is not dict:
                 results.append(value)
+                continue
 
             if type(value) is dict:
                 results = results + self.traverse_dict_for_value(value, find_value)
