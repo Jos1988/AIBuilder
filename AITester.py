@@ -94,7 +94,7 @@ class AbstractAITester(ABC):
 
 
 class AITester(AbstractAITester):
-    AI: AbstractAI
+    ml_model: AbstractAI
 
     def __init__(self, summizer: Summizer, evaluators: List[Evaluator] = None):
         self.summizer = summizer
@@ -106,11 +106,11 @@ class AITester(AbstractAITester):
             self.evaluators = evaluators
 
     def loadModel(self, ai):
-        self.set_AI(ai)
+        self.set_ml_model(ai)
         self.description_hash = self.stable_hash_description(ai.description)
 
-    def set_AI(self, ai: AbstractAI):
-        self.AI = ai
+    def set_ml_model(self, ml_model: AbstractAI):
+        self.ml_model = ml_model
 
     def is_unique(self) -> bool:
         report = self.get_report_file('r')
@@ -125,26 +125,26 @@ class AITester(AbstractAITester):
     def train_AI(self):
         self.summizer.log('start training', None)
         self.determine_test_time()
-        self.AI.train()
+        self.ml_model.train()
         self.summizer.log('finished training', None)
 
     def evaluate_AI(self):
         self.summizer.log('start evaluation', None)
-        self.AI.evaluate()
+        self.ml_model.evaluate()
         self.run_evaluators()
         self.summizer.log('finished evaluation', None)
 
     def run_evaluators(self):
         for evaluator in self.evaluators:
-            evaluator.load_ml_model(self.AI)
+            evaluator.load_ml_model(self.ml_model)
             evaluator_results = evaluator.evaluate()
-            self.AI.results.update(evaluator_results)
+            self.ml_model.results.update(evaluator_results)
 
     def summizeTime(self, print_strategy: PrintStrategy):
         self.summizer.summize(print_strategy)
 
     def validate_results_set(self):
-        assert type(self.AI.results) is dict, 'Test results not set in AI tester.'
+        assert type(self.ml_model.results) is dict, 'Test results not set in AI tester.'
 
     def determine_test_time(self):
         self.test_time = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
@@ -153,7 +153,7 @@ class AITester(AbstractAITester):
         assert type(self.test_time) is str, 'Test time not set in AITester.'
 
     def get_report_file(self, mode: str):
-        path = self.AI.get_log_dir() + '/' + self.AI.get_project_name() + '/ai_reports.txt'
+        path = self.ml_model.get_log_dir() + '/' + self.ml_model.get_project_name() + '/ai_reports.txt'
         report = open(path, mode=mode)
         return report
 

@@ -4,17 +4,21 @@ from AIBuilder.AITester import AITester
 from AIBuilder.Dispatching import KernelDispatcher, FactoryEvent, TesterEvent, ModelNotUniqueObserver, \
     PreCreateObserver, \
     PreTrainObserver, PostTrainObserver, PreEvaluationObserver, PostEvaluationObserver, Session, PreRunObserver, \
-    PostRunObserver
+    PostRunObserver, PreRunLogObserver, PostEvaluationLogObserver
 from AIBuilder.Summizer import TimeSummizer
 
 
 class Kernel:
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, **kwargs):
         self.session = session
         self.factory = None
         self.tester = None
         self.dispatcher = None
+        self.no_log = False
+
+        if 'no_log' in kwargs:
+            self.no_log = kwargs['no_log']
 
     def boot(self):
         self.dispatcher = KernelDispatcher()
@@ -26,6 +30,11 @@ class Kernel:
         self.dispatcher.addObserver(PreEvaluationObserver())
         self.dispatcher.addObserver(PostEvaluationObserver())
         self.dispatcher.addObserver(PostRunObserver())
+
+        if True is not self.no_log:
+            self.dispatcher.addObserver(PreRunLogObserver())
+            self.dispatcher.addObserver(PostEvaluationLogObserver())
+
         # self.dispatcher.dispatch(KernelDispatcher.PRE_BOOT) pre-boot hook
         self.factory = AIFactory(
             builders=Builder.get_all_registered(),

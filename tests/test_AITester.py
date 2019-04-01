@@ -21,7 +21,7 @@ class AITesterTest(TestCase):
         summizer.summize = mock.Mock(name='summize')
 
         self.ai_tester = AITester(summizer=summizer)
-        self.ai_tester.AI = self.ai
+        self.ai_tester.ml_model = self.ai
 
     def test_training(self):
         self.ai_tester.train_AI()

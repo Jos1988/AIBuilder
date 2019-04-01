@@ -135,12 +135,21 @@ class ModelNotUniqueObserver(Observer):
         printer.line('AI already evaluated')
 
         printer.separate()
-        printer.print_ai_description(ai=event.tester.AI, time_stamp=event.tester.test_time,
+        printer.print_ai_description(ai=event.tester.ml_model, time_stamp=event.tester.test_time,
                                      ai_hash=event.tester.description_hash)
         printer.separate()
 
 
 class PreRunObserver(Observer):
+    @property
+    def observed_event_names(self) -> List[str]:
+        return [KernelDispatcher.PRE_RUN]
+
+    def execute(self, event: Event):
+        pass
+
+
+class PreRunLogObserver(Observer):
 
     @property
     def observed_event_names(self) -> List[str]:
@@ -193,7 +202,7 @@ class PostRunObserver(Observer):
     def execute(self, event: Event):
         assert type(event) is TesterEvent
         event: TesterEvent
-        event.session.meta_logger.save_to_csv()
+        pass
 
 
 class PreCreateObserver(Observer):
@@ -261,8 +270,32 @@ class PostEvaluationObserver(Observer):
         event: TesterEvent
 
         self.display_console_update(event)
+
+    def display_console_update(self, event):
+        printer = TesterPrinter(ConsolePrintStrategy())
+        printer.separate()
+        printer.line('Finished Evaluation')
+        printer.separate()
+        event.tester.validate_test_time()
+        printer.print_ai_description(ai=event.tester.AI, time_stamp=event.tester.test_time,
+                                     ai_hash=event.tester.description_hash)
+        event.tester.validate_results_set()
+        printer.print_results(event.tester.AI.results)
+        event.tester.summizeTime(ConsolePrintStrategy())
+
+
+class PostEvaluationLogObserver(Observer):
+    @property
+    def observed_event_names(self) -> List[str]:
+        return [KernelDispatcher.POST_EVALUATE]
+
+    def execute(self, event: Event):
+        assert type(event) is TesterEvent
+        event: TesterEvent
+
         self.update_report(event)
         self.update_meta_report(event)
+        event.session.meta_logger.save_to_csv()
 
     def update_report(self, event):
         report = event.tester.get_report_file('a')
@@ -277,18 +310,6 @@ class PostEvaluationObserver(Observer):
         report_printer.separate()
         event.tester.summizer.reset()
         report_printer.output.close_report()
-
-    def display_console_update(self, event):
-        printer = TesterPrinter(ConsolePrintStrategy())
-        printer.separate()
-        printer.line('Finished Evaluation')
-        printer.separate()
-        event.tester.validate_test_time()
-        printer.print_ai_description(ai=event.tester.AI, time_stamp=event.tester.test_time,
-                                     ai_hash=event.tester.description_hash)
-        event.tester.validate_results_set()
-        printer.print_results(event.tester.AI.results)
-        event.tester.summizeTime(ConsolePrintStrategy())
 
     def update_meta_report(self, event):
         event.session.meta_logger.log_ml_model(event.tester.AI)
