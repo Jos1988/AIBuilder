@@ -277,10 +277,10 @@ class PostEvaluationObserver(Observer):
         printer.line('Finished Evaluation')
         printer.separate()
         event.tester.validate_test_time()
-        printer.print_ai_description(ai=event.tester.AI, time_stamp=event.tester.test_time,
+        printer.print_ai_description(ai=event.tester.ml_model, time_stamp=event.tester.test_time,
                                      ai_hash=event.tester.description_hash)
         event.tester.validate_results_set()
-        printer.print_results(event.tester.AI.results)
+        printer.print_results(event.tester.ml_model.results)
         event.tester.summizeTime(ConsolePrintStrategy())
 
 
@@ -302,9 +302,9 @@ class PostEvaluationLogObserver(Observer):
         report_printer = TesterPrinter(ReportPrintStrategy(report=report))
         report_printer.line('')
         report_printer.print_ai_description(
-            ai=event.tester.AI, time_stamp=event.tester.test_time, ai_hash=event.tester.description_hash)
+            ai=event.tester.ml_model, time_stamp=event.tester.test_time, ai_hash=event.tester.description_hash)
         report_printer.line('')
-        report_printer.print_results(event.tester.AI.results)
+        report_printer.print_results(event.tester.ml_model.results)
         report_printer.separate()
         event.tester.summizeTime(report_printer.output)
         report_printer.separate()
@@ -312,4 +312,4 @@ class PostEvaluationLogObserver(Observer):
         report_printer.output.close_report()
 
     def update_meta_report(self, event):
-        event.session.meta_logger.log_ml_model(event.tester.AI)
+        event.session.meta_logger.log_ml_model(event.tester.ml_model)
