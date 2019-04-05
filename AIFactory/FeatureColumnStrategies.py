@@ -117,7 +117,8 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == '_IndicatorColumn'
+            assert result.__class__.__name__ == 'IndicatorColumn', \
+                'Result is wrong class "{}"'.format(result.__class__.__name__)
 
     @staticmethod
     def column_types() -> list:
@@ -201,7 +202,8 @@ class BucketizedColumnStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == '_BucketizedColumn'
+            assert result.__class__.__name__ == 'BucketizedColumn',\
+                'Result is wrong class "{}"'.format(result.__class__.__name__)
 
     @staticmethod
     def column_types() -> list:

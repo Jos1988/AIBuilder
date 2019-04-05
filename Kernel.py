@@ -1,6 +1,6 @@
 from AIBuilder.AIFactory.AIFactory import AIFactory
 from AIBuilder.AIFactory.Builders import Builder
-from AIBuilder.AITester import AITester
+from AIBuilder.AITester import AITester, GainBasedFeatureImportance
 from AIBuilder.Dispatching import KernelDispatcher, FactoryEvent, TesterEvent, ModelNotUniqueObserver, \
     PreCreateObserver, \
     PreTrainObserver, PostTrainObserver, PreEvaluationObserver, PostEvaluationObserver, Session, PreRunObserver, \
@@ -42,7 +42,9 @@ class Kernel:
             log_dir=self.session.log_dir)
         summizer = TimeSummizer()
 
-        self.tester = AITester(summizer=summizer, evaluators=[])
+        feature_importance = GainBasedFeatureImportance()
+
+        self.tester = AITester(summizer=summizer, evaluators=[feature_importance])
         # self.dispatcher.dispatch(KernelDispatcher.POST_BOOT) post-boot hook
 
     def run(self):

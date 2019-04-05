@@ -2,6 +2,8 @@ from typing import List
 
 import pandas as pd
 from abc import ABC, abstractmethod
+import tensorflow as tf
+import numpy as np
 
 from AIBuilder import AI
 from AIBuilder.AI import AbstractAI
@@ -12,6 +14,7 @@ import hashlib
 
 
 class Evaluator(ABC):
+    ml_model: AI
 
     def __init__(self):
         self.ml_model = None
@@ -24,11 +27,41 @@ class Evaluator(ABC):
         self.result = {}
 
     @abstractmethod
+    def do_run(self, ml_model: AI) -> bool:
+        pass
+
+    @abstractmethod
     def evaluate(self) -> dict:
         pass
 
 
+class GainBasedFeatureImportance(Evaluator):
+    """
+    Relevant for Boosted Trees, calculates gain from features and loads them into a 2-D list.
+    tensorflos docs: https://www.tensorflow.org/tutorials/estimators/boosted_trees_model_understanding#1_gain-based_feature_importances
+    example:
+    { 'feature importance': [['feature1': 3.5]
+                              ['feature2': 1.3]
+                              ['feature3': 0.2]]}
+    """
+
+    def do_run(self, ml_model: AI) -> bool:
+        return isinstance(ml_model.estimator, tf.estimator.BoostedTreesClassifier)
+
+    def evaluate(self) -> dict:
+        estimator = self.ml_model.estimator
+        assert isinstance(estimator, tf.estimator.BoostedTreesClassifier)
+
+        importance = estimator.experimental_feature_importances(normalize=False)
+        importance = np.column_stack([importance[0], importance[1]])
+
+        return {'feature importance': importance}
+
+
 class BinaryClassificationEvaluator(Evaluator):
+
+    def do_run(self, ml_model: AI) -> bool:
+        return False
 
     def evaluate(self) -> dict:
         predictions = self.get_predictions()
@@ -136,6 +169,9 @@ class AITester(AbstractAITester):
 
     def run_evaluators(self):
         for evaluator in self.evaluators:
+            if not evaluator.do_run(self.ml_model):
+                continue
+
             evaluator.load_ml_model(self.ml_model)
             evaluator_results = evaluator.evaluate()
             self.ml_model.results.update(evaluator_results)
