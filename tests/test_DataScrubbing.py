@@ -6,7 +6,7 @@ from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
-    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler
+    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy
 
 
 class TestConvertToNumericScrubber(unittest.TestCase):
@@ -648,21 +648,20 @@ class TestBinaryResampler(unittest.TestCase):
         self.data_model.metadata = metadata
 
     def test_validate(self):
-        scrubber = BinaryResampler('cat_2', BinaryResampler.UNDER_SAMPLING)
+        scrubber = BinaryResampler('cat_2', UnbalancedDataStrategy.UNDER_SAMPLING)
         scrubber.validate_metadata(self.data_model.metadata)
         scrubber.validate(self.data_model)
 
     def test_scrub_under_sampling(self):
-        scrubber = BinaryResampler('cat_2', BinaryResampler.UNDER_SAMPLING)
+        scrubber = BinaryResampler('cat_2', UnbalancedDataStrategy.UNDER_SAMPLING)
         result = scrubber.scrub(self.data_model)
         df = result.get_dataframe()
-        print(df)
 
         self.assertEqual(len(df), 6)
         self.assertEqual(0.5, df['cat_2'].mean())
 
     def test_scrub_over_sampling(self):
-        scrubber = BinaryResampler('cat_2', BinaryResampler.OVER_SAMPLING)
+        scrubber = BinaryResampler('cat_2', UnbalancedDataStrategy.OVER_SAMPLING)
         result = scrubber.scrub(self.data_model)
         df = result.get_dataframe()
 
