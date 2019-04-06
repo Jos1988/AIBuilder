@@ -49,7 +49,7 @@ class NumericColumnStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == '_NumericColumn'
+            assert result.__class__.__name__ == 'NumericColumn', 'Result is wrong class "{}"'.format(result.__class__.__name__)
 
     @staticmethod
     def column_types() -> list:
@@ -71,7 +71,8 @@ class CategoricalColumnWithVOCListStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == '_VocabularyListCategoricalColumn'
+            assert result.__class__.__name__ == 'VocabularyListCategoricalColumn',  'Result is wrong class "{}"'\
+                .format(result.__class__.__name__)
 
     @staticmethod
     def column_types() -> list:
@@ -92,7 +93,8 @@ class CategoricalColumnWithIdentity(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == '_IdentityCategoricalColumn'
+            assert result.__class__.__name__ == 'IdentityCategoricalColumn', 'Result is wrong class "{}"'.format(
+                result.__class__.__name__)
 
     @staticmethod
     def column_types() -> list:
@@ -102,7 +104,7 @@ class CategoricalColumnWithIdentity(FeatureColumnStrategy):
 class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
     def build_column(self) -> list:
-        #todo: which grabber to use here?
+        # todo: which grabber to use here?
         category_grabber = SimpleCategoryGrabber(data_model=self.data_model, column_name=self.column_name)
         categories = category_grabber.grab()
 
@@ -163,7 +165,7 @@ class MultipleHotFeatureStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == '_IdentityCategoricalColumn'
+            assert result.__class__.__name__ == 'IdentityCategoricalColumn'
 
     @staticmethod
     def column_types() -> list:
@@ -202,7 +204,7 @@ class BucketizedColumnStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == 'BucketizedColumn',\
+            assert result.__class__.__name__ == 'BucketizedColumn', \
                 'Result is wrong class "{}"'.format(result.__class__.__name__)
 
     @staticmethod

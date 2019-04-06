@@ -76,11 +76,16 @@ class Builder(ABC):
 
 class DataBuilder(Builder):
 
-    def __init__(self, data_source: str, target_column: str, data_columns: list):
+    def __init__(self, data_source: str, target_column: str, data_columns: list, weight_column: str = None):
         super().__init__()
         self.data_columns = DataTypeSpecification('columns', data_columns, list)
         self.data_source = DataTypeSpecification('data_source', data_source, str)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
+        self.weight_column = NullSpecification('weight_column')
+
+        if None is not weight_column:
+            self.weight_column = DataTypeSpecification('weight_column', weight_column, str)
+
         self.test_data = None
         self.validation_data = None
 
@@ -98,6 +103,7 @@ class DataBuilder(Builder):
     def build(self, ai: AbstractAI):
         data = self.load_data()
         data.set_target_column(self.target_column())
+        data.set_weight_column(self.weight_column())
         ai.set_training_data(data)
 
     def load_data(self) -> DataModel:
@@ -107,6 +113,7 @@ class DataBuilder(Builder):
 
         columns = self.data_columns().copy()
         columns.append(self.target_column())
+        columns.append(self.weight_column())
         loader.filter_columns(set(columns))
 
         return loader.get_dataset()
@@ -274,7 +281,7 @@ class InputFunctionBuilder(Builder):
             return self.load_from_holder(data_model, fn_name, kwargs)
 
         if fn_name == self.PANDAS_FN:
-            kwargs['x'] = data_model.get_feature_columns()
+            kwargs['x'] = data_model.get_input_fn_x_data()
             kwargs['y'] = data_model.get_target_column()
             kwargs['target_column'] = data_model.target_column_name
 

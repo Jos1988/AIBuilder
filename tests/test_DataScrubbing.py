@@ -1,4 +1,6 @@
 import unittest
+
+from AIBuilder.AIFactory import BalanceData
 from AIBuilder.Data import DataModel, MetaData
 import pandas as pd
 import numpy as np
@@ -667,6 +669,26 @@ class TestBinaryResampler(unittest.TestCase):
 
         self.assertEqual(len(df), 14)
         self.assertEqual(0.5, df['cat_2'].mean())
+
+    def test_re_weigh(self):
+        scrubber = BinaryResampler('cat_2', UnbalancedDataStrategy.RE_WEIGH)
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+
+        weights_for_0 = []
+        weights_for_1 = []
+        for row in df.values:
+            if row[1] == 1:
+                weights_for_1.append(row[2])
+            elif row[1] == 0:
+                weights_for_0.append(row[2])
+
+        # check all row with the same target category have got the same weight.
+        self.assertEqual(1, len(set(weights_for_0)))
+        self.assertEqual(1, len(set(weights_for_1)))
+
+        # all weights combined should approx. equal the length of the dataframe because that indicate an average weight of 1.
+        self.assertAlmostEqual(len(df), sum(df[BalanceData.WEIGHTS_COLUMN].values))
 
 
 if __name__ == '__main__':

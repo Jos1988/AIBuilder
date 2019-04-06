@@ -120,6 +120,7 @@ class DataModel:
         # todo use metadata object instead?
         self.feature_columns_names = []
         self.target_column_name = None
+        self.weight_column_name = None
 
     def get_dataframe(self):
         return self._dataframe
@@ -161,6 +162,23 @@ class DataModel:
         self.validate_columns([self.target_column_name])
 
         return self._dataframe[self.target_column_name]
+
+    def set_weight_column(self, target_column_name: str):
+        self.weight_column_name = target_column_name
+
+    def get_weight_column(self):
+        self.validate_columns([self.weight_column_name])
+
+        return self._dataframe[self.weight_column_name]
+
+    def get_input_fn_x_data(self):
+        x_column_names = self.feature_columns_names
+        if self.weight_column_name is not None:
+            x_column_names.append(self.weight_column_name)
+
+        self.validate_columns(x_column_names)
+
+        return self._dataframe[x_column_names]
 
     def __len__(self):
         return len(self._dataframe)
