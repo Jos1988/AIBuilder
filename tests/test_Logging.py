@@ -240,6 +240,14 @@ class TestRecordCollection(unittest.TestCase):
 
         self.assertEqual([], self.collection.record_groups)
 
+    def test_clear(self):
+        for record in self.records:
+            self.collection.add(record)
+
+        self.assertEqual(4, len(self.collection.record_groups))
+        self.collection.clear()
+        self.assertEqual(0, len(self.collection.record_groups))
+
 
 @unittest.skip
 class TestCSVHandling(unittest.TestCase):

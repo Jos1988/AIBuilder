@@ -108,6 +108,9 @@ class RecordCollection:
             if 0 == len(group):
                 self.record_groups.remove(group)
 
+    def clear(self):
+        self.record_groups = []
+
     def __len__(self):
         length = 0
         for group in self.record_groups:
@@ -326,4 +329,5 @@ class MetaLogger:
         file = self.log_file_path.open(mode='w', newline='')
         converter = CSVConverter(file, records_to_save)
         converter.writeMetaLog()
+        self.record_collection.clear()
         file.close()

@@ -3,6 +3,26 @@ from typing import List, Optional
 import tensorflow as tf
 
 
+class Describer:
+
+    def describe(self):
+        description = {}
+        specs = self.get_specs()
+        for spec in specs:
+            description[spec.name] = spec.describe()
+
+        return description
+
+    def validate_specifications(self):
+        specs = self.get_specs()
+
+        for spec in specs:
+            spec.validate()
+
+    def get_specs(self):
+        return [getattr(self, attr) for attr in dir(self) if isinstance(getattr(self, attr), Specification)]
+
+
 class Specification(ABC):
 
     def __init__(self, name: str, value):
@@ -106,6 +126,7 @@ class NullSpecification(Specification):
         assert self.value is None, 'Null Specification not None but, {}.'.format(self.value)
 
 
+# todo: temp solution for scrubbers.
 class Descriptor(Specification):
 
     def __init__(self, name: str, value: Optional[List]):

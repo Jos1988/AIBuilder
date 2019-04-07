@@ -4,7 +4,7 @@ from copy import deepcopy
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategyFactory, OptimizerStrategy
-from AIBuilder.AIFactory.Specifications import Specification, ConfigDescriber, PrefixedDictSpecification
+from AIBuilder.AIFactory.Specifications import Specification, ConfigDescriber, PrefixedDictSpecification, Describer
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
@@ -17,7 +17,7 @@ from AIBuilder.AI import AbstractAI
 import AIBuilder.DataScrubbing as scrubber
 
 
-class Builder(ABC):
+class Builder(ABC, Describer):
     # add you new builder types here.
     ESTIMATOR = 'estimator'
     OPTIMIZER = 'optimizer'
@@ -51,23 +51,6 @@ class Builder(ABC):
     @classmethod
     def get_all_registered(cls):
         return cls.builder_registry
-
-    def describe(self):
-        description = {}
-        specs = self.get_specs()
-        for spec in specs:
-            description[spec.name] = spec.describe()
-
-        return description
-
-    def validate_specifications(self):
-        specs = self.get_specs()
-
-        for spec in specs:
-            spec.validate()
-
-    def get_specs(self):
-        return [getattr(self, attr) for attr in dir(self) if isinstance(getattr(self, attr), Specification)]
 
     @abstractmethod
     def build(self, neural_net: AbstractAI):
@@ -438,6 +421,10 @@ class ScrubAdapter(Builder):
     def add_scrubber(self, scrubber: scrubber.Scrubber):
         self.and_scrubber.add_scrubber(scrubber)
         self.descriptor.add_description(scrubber.__class__.__name__)
+
+    def describe(self):
+        return {'scrubber_names': super(ScrubAdapter, self).describe(),
+                'scrubbers': self.and_scrubber.describe()}
 
     def validate(self):
         pass

@@ -5,7 +5,8 @@ from AIBuilder.AIFactory import BalanceData
 from AIBuilder.AIFactory.BalanceData import UnbalancedDataStrategy, UnbalancedDataStrategyFactory
 from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
-from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification, TypeSpecification
+from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification, TypeSpecification, Describer, \
+    PrefixedDictSpecification
 from AIBuilder.Data import DataModel, MetaData
 from currency_converter import CurrencyConverter
 from datetime import datetime
@@ -17,7 +18,7 @@ from AIBuilder.Summizer import TimeSummizer
 from AIBuilder.SyntacticTools import AliasLoader
 
 
-class Scrubber(ABC):
+class Scrubber(ABC, Describer):
 
     @property
     @abstractmethod
@@ -58,9 +59,9 @@ class ConvertToNumericScrubber(Scrubber):
     """
 
     def __init__(self, column_names: List[str], downcast=None, errors='coerce'):
-        self.errors = errors
-        self.column_names = column_names
-        self.downcast = downcast
+        self.errors = DataTypeSpecification('CTNS_errors', errors, str)
+        self.column_names = DataTypeSpecification('CTNS_column_names', column_names, list)
+        self.downcast = DataTypeSpecification('CSTNS_downcast', downcast, str)
 
     @property
     def scrubber_config_list(self):
@@ -74,8 +75,8 @@ class ConvertToNumericScrubber(Scrubber):
 
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
-        for column_name in self.column_names:
-            num_column = pd.to_numeric(df[column_name], downcast=self.downcast, errors=self.errors)
+        for column_name in self.column_names():
+            num_column = pd.to_numeric(df[column_name], downcast=self.downcast(), errors=self.errors())
             df[column_name] = num_column
 
         data_model.set_dataframe(df)
@@ -90,7 +91,7 @@ class MissingDataScrubber(Scrubber):
 
         :param scrub_columns:
         """
-        self.scrub_columns = scrub_columns
+        self.scrub_columns = DataTypeSpecification('MDS_scrub_columns', scrub_columns, list)
 
     @property
     def scrubber_config_list(self):
@@ -114,14 +115,14 @@ class MissingDataScrubber(Scrubber):
         return data_model
 
     def scrub_categorical(self, data_model, df):
-        categorical_col_names_to_check = list(set(self.scrub_columns) & set(data_model.metadata.categorical_columns))
+        categorical_col_names_to_check = list(set(self.scrub_columns()) & set(data_model.metadata.categorical_columns))
         categorical_cols_to_check = df[categorical_col_names_to_check]
         indexes_with_none = self.get_indexes_with_none_value(categorical_cols_to_check)
 
         return df.drop(index=indexes_with_none)
 
     def scrub_numerical(self, data_model, df):
-        numerical_col_names_to_check = list(set(self.scrub_columns) & set(data_model.metadata.numerical_columns))
+        numerical_col_names_to_check = list(set(self.scrub_columns()) & set(data_model.metadata.numerical_columns))
         numerical_cols_to_check = df[numerical_col_names_to_check]
         indexes_with_nan = self.get_indexes_with_nan_value(numerical_cols_to_check)
 
@@ -377,6 +378,13 @@ class AndScrubber(Scrubber):
         for scrubber in scrubbers:
             self.add_scrubber(scrubber)
 
+    def describe(self):
+        description = {'self': super(AndScrubber, self).describe()}
+        for scrubber in self.scrubber_list:
+            description[scrubber.__class__.__name__] = scrubber.describe()
+
+        return description
+
     def add_scrubber(self, scrubber: Scrubber):
         self.scrubber_list.append(scrubber)
 
@@ -450,11 +458,12 @@ class OutlierScrubber(Scrubber):
     def __init__(self, col_z: dict = None, all_z: int = None):
         self.all_z = NullSpecification(name='all_z')
         if all_z is not None:
-            self.all_z = DataTypeSpecification(name='all_z', value=all_z, data_type=int)
+            self.all_z = DataTypeSpecification(name='OS_all_z', value=all_z, data_type=int)
 
-        self.col_z = NullSpecification(name='column_z_values')
+        self.col_z = NullSpecification(name='OS_column_z_values')
         if col_z is not None:
-            self.col_z = DataTypeSpecification(name='column_z_values', value=col_z, data_type=dict)
+            self.col_z = DataTypeSpecification(name='OS_column_z_values', value=col_z, data_type=dict)
+            self.col_z = PrefixedDictSpecification(name='OS_column_z_values', prefix='OS_', value=col_z)
 
         assert col_z is None or all_z is None, 'coll_z and all_z cannot be used together in outlier scrubber.'
         assert col_z is not None or all_z is not None, 'Either coll_z or all_z is required in outlier scrubber.'
@@ -821,11 +830,11 @@ class BinaryResampler(Scrubber):
     WEIGHT_COLUMN = BalanceData.WEIGHTS_COLUMN
 
     def __init__(self, column_name: str, strategy: str, shuffle: bool = True):
-        self.column_name = DataTypeSpecification('column_names', column_name, str)
-        self.strategy = TypeSpecification('strategy', strategy,
+        self.column_name = DataTypeSpecification('BR_column_names', column_name, str)
+        self.strategy = TypeSpecification('BR_strategy', strategy,
                                           [UnbalancedDataStrategy.OVER_SAMPLING, UnbalancedDataStrategy.UNDER_SAMPLING,
                                            UnbalancedDataStrategy.RE_WEIGH])
-        self.shuffle = DataTypeSpecification('re-shuffle', shuffle, bool)
+        self.shuffle = DataTypeSpecification('BR_re-shuffle', shuffle, bool)
         self.factory = UnbalancedDataStrategyFactory()
 
     @property
