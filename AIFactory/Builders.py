@@ -113,8 +113,23 @@ class DataSplitterBuilder(Builder):
     TRAINING_DATA = 'training'
     EVALUATION_DATA = 'evaluation'
 
-    def __init__(self, evaluation_data_perc: int, data_source: str):
+    def __init__(self, evaluation_data_perc: int, data_source: str, random_seed: Optional[int] = None):
+        """ Splits data already set on the ml model, using either the training data or evaluation data as source.
+        The respective data is then split and loaded back into the training and evaluation data of the model.
+
+        :param evaluation_data_perc: Percentage of data that will be cut of from data in data source and set to
+                                     evaluation data of the ml model.
+        :param data_source:          Data used to split.
+        :param random_seed:          If set, seed will be used to shuffle the data before splitting, run multiple
+                                     models with different seeds to achieve k-fold evaluation.
+        """
         super().__init__()
+        self.randomize = DataTypeSpecification('splitter_randomize', False, bool)
+        self.seed = NullSpecification('splitter_seed')
+        if random_seed is not None:
+            self.randomize = DataTypeSpecification('splitter_randomize', True, bool)
+            self.seed = DataTypeSpecification('splitter_seed', random_seed, int)
+
         self.data_source = TypeSpecification(name='data_source',
                                              value=data_source,
                                              valid_types=[self.TRAINING_DATA, self.EVALUATION_DATA])
@@ -143,6 +158,7 @@ class DataSplitterBuilder(Builder):
 
     def build(self, neural_net: AbstractAI):
         data = self.select_data(neural_net)
+        self.randomize_data(data)
 
         splitter = DataSetSplitter(data_model=data)
         split_data = splitter.split_by_ratio([self.training_data_percentage(), self.evaluation_data_perc()])
@@ -150,11 +166,17 @@ class DataSplitterBuilder(Builder):
         neural_net.set_training_data(split_data[0])
         neural_net.set_evaluation_data(split_data[1])
 
-    def select_data(self, neural_net):
+    def randomize_data(self, data: DataModel):
+        if self.randomize():
+            df = data.get_dataframe()
+            df = df.sample(frac=1, random_state=self.seed())
+            data.set_dataframe(df)
+
+    def select_data(self, neural_net: AbstractAI) -> DataModel:
         if self.data_source() == self.TRAINING_DATA:
             data = neural_net.get_training_data()
         elif self.data_source() == self.EVALUATION_DATA:
-            data = neural_net.get_training_data()
+            data = neural_net.get_evaluation_data()
         else:
             raise RuntimeError('Unknown data_source ({}) found in data splitter builder.'.format(self.data_source()))
         return data
@@ -520,6 +542,7 @@ class FeatureColumnBuilder(Builder):
     @property
     def dependent_on(self) -> list:
         return [self.DATA_MODEL, self.SCRUBBER]
+
     # requires scrubbed data in order to generate categories for categorical columns.
 
     @property

@@ -863,7 +863,8 @@ class BinaryResampler(Scrubber):
 
     def shuffle_data(self, scrubbed_df: pd.DataFrame) -> pd.DataFrame:
         if self.shuffle():
-            scrubbed_df = scrubbed_df.sample(frac=1)
+            # give sample a fixed random state to make results reproducible.
+            scrubbed_df = scrubbed_df.sample(frac=1, random_state=1)
         scrubbed_df = scrubbed_df.reset_index(drop=True)
 
         return scrubbed_df

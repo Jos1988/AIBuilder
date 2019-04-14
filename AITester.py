@@ -58,6 +58,35 @@ class GainBasedFeatureImportance(Evaluator):
         return {'feature importance': importance}
 
 
+class AccuracyBaselineDiff(Evaluator):
+    """
+    Adds the difference between accuracy and the accuracy baseline to the eval metrics.
+    { 'accuracy_diff':0.015}
+    """
+
+    CLASSIFIERS = [
+        tf.estimator.BoostedTreesClassifier,
+        tf.estimator.DNNClassifier,
+        tf.estimator.LinearClassifier,
+    ]
+
+    def do_run(self, ml_model: AI) -> bool:
+        """ Has to be a classifier, because 'accuracy' and  'accuracy_baseline' are required metrics.
+        """
+
+        for estimator in self.CLASSIFIERS:
+            if isinstance(ml_model.estimator, estimator):
+                return True
+
+        return False
+
+    def evaluate(self) -> dict:
+        accuracy = float(self.ml_model.results['accuracy'])
+        accuracyBaseline = float(self.ml_model.results['accuracy_baseline'])
+
+        return {'accuracy_diff': accuracy - accuracyBaseline}
+
+
 class BinaryClassificationEvaluator(Evaluator):
 
     def do_run(self, ml_model: AI) -> bool:

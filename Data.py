@@ -198,6 +198,13 @@ class DataSetSplitter:
         self._data_model = data_model
 
     def split_by_ratio(self, ratios: list) -> list:
+        """ splits data in DataModel according to ratio passed. Effectively cuts the data into sliced as dictated by
+        the ratio. Which results in a stable algoritm that slices the data at te same point given that the ratios
+        and the data length (n) stay the same.
+
+        :param ratios:
+        :return:
+        """
         model_data = self._data_model.get_dataframe()
 
         ratios = np.array(ratios)

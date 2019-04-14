@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from AIBuilder.Data import DataModel
 import tensorflow as tf
-from typing import Callable
+from typing import Callable, Optional
 
 
 # abstract AI class
@@ -52,7 +52,7 @@ class AbstractAI(ABC):
         pass
 
     @abstractmethod
-    def get_training_data(self):
+    def get_training_data(self) -> Optional[DataModel]:
         pass
 
     @abstractmethod
@@ -64,7 +64,7 @@ class AbstractAI(ABC):
         pass
 
     @abstractmethod
-    def get_evaluation_data(self):
+    def get_evaluation_data(self) -> Optional[DataModel]:
         pass
 
     @abstractmethod
