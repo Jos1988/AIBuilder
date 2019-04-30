@@ -1,19 +1,21 @@
 import unittest
+import warnings
 from pathlib import Path
 from unittest import mock
 
-from AIBuilder.AIFactory.Logging import LogRecord, MetaLogger, RecordCollection, CSVConverter, CSVReader
+from AIBuilder.AIFactory.Logging import LogRecord, RecordCollection, CSVFormatter, CSVReader, MetaLogger, \
+    CSVMetaLogFormatter, CSVSummaryLogFormatter, SummaryLogger
 
 
 class TestLogRecord(unittest.TestCase):
 
     def test_is_same_group(self):
         r1 = LogRecord(attributes={'a': 1, 'b': 2, 'c': 'data', 'group': 5}, metrics={'m_a': 1, 'm_b': 2},
-                       discrimination_value='group')
+                       discriminator_name='group')
         r2 = LogRecord(attributes={'a': 1, 'b': 2, 'c': 'data', 'group': 6}, metrics={'m_a': 5, 'm_b': 3},
-                       discrimination_value='group')
+                       discriminator_name='group')
         r3 = LogRecord(attributes={'a': 7, 'b': 8, 'c': 'data', 'group': 7}, metrics={'m_a': 1, 'm_b': 2},
-                       discrimination_value='group')
+                       discriminator_name='group')
 
         self.assertTrue(r1.is_same_group(r2))
         self.assertTrue(r2.is_same_group(r1))
@@ -116,9 +118,9 @@ class TestMetaLogger(unittest.TestCase):
         model3.description = self.model3_description
         model3.results = self.model3_metrics
 
-        self.meta_logger.log_ml_model(model1)
-        self.meta_logger.log_ml_model(model2)
-        self.meta_logger.log_ml_model(model3)
+        self.meta_logger.add_ml_model(model1)
+        self.meta_logger.add_ml_model(model2)
+        self.meta_logger.add_ml_model(model3)
 
         groups = self.meta_logger.record_collection.record_groups
 
@@ -156,14 +158,14 @@ def getTestRecords():
     return [record3a, record3b, record3c, record2a, record2b, record2c, record1a, record1b, record1c, record4]
 
 
-class TestCSVConverter(unittest.TestCase):
+class TestCSVMetaLogFormatter(unittest.TestCase):
 
     def test_generate_summary(self):
         record1 = LogRecord({'a': '2', 'b': '1', 'seed': '10'}, {'m_a': '1', 'm_b': '2.5'}, 'seed')
         record2 = LogRecord({'a': '2', 'b': '1', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
         record3 = LogRecord({'a': '2', 'b': '1', 'seed': '12'}, {'m_a': '3', 'm_b': '1.5'}, 'seed')
 
-        summary = CSVConverter.generate_summary([record1, record2, record3])
+        summary = CSVMetaLogFormatter.generate_group_summary([record1, record2, record3], write_attributes=False)
         self.assertEqual('2.0', summary['m_a'])
         self.assertEqual('2.0', summary['m_b'])
 
@@ -249,64 +251,103 @@ class TestRecordCollection(unittest.TestCase):
         self.assertEqual(0, len(self.collection.record_groups))
 
 
-@unittest.skip
+# @unittest.skip
 class TestCSVHandling(unittest.TestCase):
-    def setUp(self):
-        self.path = Path('data/test_log.csv')
 
-    # Test creates a file.
-    def test_write_meta_log(self):
+    def load_test_collection(self):
         collection = RecordCollection(['a', 'b', 'seed'], ['m_a', 'm_b'], 'seed')
-
         for record in getTestRecords():
             collection.add(record)
+        return collection
 
-        file = self.path.open(mode='w', newline='')
-        self.csv_converter = CSVConverter(file=file, record_collection=collection)
-        self.csv_converter.writeMetaLog()
-        file.close()
+    def load_new_records(self):
+        new_records = RecordCollection(['a', 'b', 'seed'], ['m_a', 'm_b'], 'seed')
+        new_record1 = LogRecord({'a': '1', 'b': '1', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
+        new_record2 = LogRecord({'a': '1', 'b': '2', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
+        new_record3 = LogRecord({'a': '2', 'b': '1', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
 
-    # Test requires file.
-    def test_check_csv_compatible(self):
+        new_records.add(new_record2)
+        new_records.add(new_record3)
+        new_records.add(new_record1)
+
+        return new_records
+
+    def test_metalog_monolithic(self):
+        self.metaLogPath = Path('data/test_meta_log.csv')
+        self._write_meta_log()
+        self._check_metalog_csv_compatible()
+        self._meta_logger_update_csv()
+        self._load_metalog_to_records()
+        self.metaLogPath.unlink()
+
+    # Test creates the metaLog file.
+    def _write_meta_log(self):
+        collection = self.load_test_collection()
+
+        metaLog = self.metaLogPath.open(mode='w', newline='')
+        metaLogWriter = CSVMetaLogFormatter(file=metaLog, record_collection=collection)
+        metaLogWriter.write_csv()
+        metaLog.close()
+
+    # Test requires the metaLog and Summary file.
+    def _check_metalog_csv_compatible(self):
         reader = CSVReader(attribute_names=['a', 'b', 'seed'], metric_names=['m_a', 'm_b'], discriminator='seed')
-        result = reader.check_compatible(self.path)
+        metaLogResult = reader.check_compatible(self.metaLogPath)
 
-        self.assertEqual(True, result)
+        self.assertEqual(True, metaLogResult)
 
-    # Test requires existing file.
-    def test_metalogger_update_csv(self):
-        metalogger = MetaLogger(log_attributes=['a', 'b', 'seed'], log_metrics=['m_a', 'm_b'],
-                                discrimination_value='seed', log_file_path=Path('data/test_log.csv'))
+    # Test requires existing metaLog file.
+    def _meta_logger_update_csv(self):
+        meta_logger = MetaLogger(log_attributes=['a', 'b', 'seed'], log_metrics=['m_a', 'm_b'],
+                                 discrimination_value='seed', log_file_path=self.metaLogPath)
 
-        existing_records = RecordCollection(['a', 'b', 'seed'], ['m_a', 'm_b'], 'seed')
-        existing_record1 = LogRecord({'a': '1', 'b': '1', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
-        existing_record2 = LogRecord({'a': '1', 'b': '2', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
-        existing_record3 = LogRecord({'a': '2', 'b': '1', 'seed': '11'}, {'m_a': '2', 'm_b': '2'}, 'seed')
+        meta_logger.record_collection = self.load_new_records()
+        meta_logger.save_logged_data()
+        warnings.warn('Please check that {} is correct.'.format(self.metaLogPath.absolute()))
 
-        existing_records.add(existing_record2)
-        existing_records.add(existing_record3)
-        existing_records.add(existing_record1)
-
-        metalogger.record_collection = existing_records
-        metalogger.save_to_csv()
-
-    # Test requires file.
-    def test_load_csv_to_records(self):
-        file = self.path.open(mode='r', newline='')
+    # Test requires metaLog file.
+    def _load_metalog_to_records(self):
+        file = self.metaLogPath.open(mode='r', newline='')
         reader = CSVReader(attribute_names=['a', 'b', 'seed'], metric_names=['m_a', 'm_b'], discriminator='seed')
         result = reader.load_csv(file)
-        expected = getTestRecords()
+        expected = getTestRecords() + self.load_new_records().get_records()
 
         self.assertEqual(len(result), len(expected))
-        i = len(result) - 1
-        records = result.get_records()
-
-        while i >= 0:
-            resulting_record = records[i]
-            expected_record = expected[i]
-            self.assertEqual(resulting_record.attributes, expected_record.attributes)
-            self.assertEqual(resulting_record.metrics, expected_record.metrics)
-            i = i - 1
 
         file.close()
-        self.path.unlink()
+
+    def test_summary_monolithic(self):
+        self.summaryPath = Path('data/test_summary.csv')
+        self.metaLogPath = Path('data/test_meta_log.csv')
+        self._write_summary()
+        self._write_meta_log()
+        self._check_csv_summary_compatible()
+        self._summary_update_csv()
+        self.summaryPath.unlink()
+        self.metaLogPath.unlink()
+
+    # Test creates the summary file.
+    def _write_summary(self):
+        collection = self.load_test_collection()
+
+        summary = self.summaryPath.open(mode='w', newline='')
+        summaryWriter = CSVSummaryLogFormatter(file=summary, record_collection=collection)
+        summaryWriter.write_csv()
+        summary.close()
+
+    # Test requires the metaLog and Summary file.
+    def _check_csv_summary_compatible(self):
+        reader = CSVReader(attribute_names=['a', 'b', 'seed'], metric_names=['m_a', 'm_b'], discriminator='seed')
+        summaryResult = reader.check_compatible(self.summaryPath)
+
+        self.assertEqual(True, summaryResult)
+
+    # Test requires existing summary file.
+    def _summary_update_csv(self):
+        summary_logger = SummaryLogger(log_attributes=['a', 'b', 'seed'], log_metrics=['m_a', 'm_b'],
+                                       discrimination_value='seed', log_file_path=self.summaryPath,
+                                       summary_log_file_path=self.summaryPath)
+
+        summary_logger.record_collection = self.load_new_records()
+        summary_logger.save_logged_data()
+        warnings.warn('Please check that {} is correct.'.format(self.summaryPath.absolute()))

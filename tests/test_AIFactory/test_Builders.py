@@ -68,6 +68,20 @@ class TestDataBuilder(unittest.TestCase):
         column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
         self.validate_data_frame(arti.training_data, column_names)
 
+    def test_build_with_eval_data(self):
+        data_builder = DataBuilder(data_source='C:/python/practice2/AIBuilder/tests/data/test_data.csv',
+                                   target_column='target_1',
+                                   data_columns=['feature_1', 'feature_2', 'feature_3'],
+                                   eval_data_source='C:/python/practice2/AIBuilder/tests/data/eval_test_data.csv')
+
+        arti = AI(project_name='name', log_dir='path/to/dir')
+        data_builder.validate()
+        data_builder.build(ai=arti)
+
+        column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
+        self.validate_data_frame(arti.training_data, column_names)
+        self.validate_data_frame(arti.evaluation_data, column_names)
+
     def test_constructor_build(self):
         data_builder = DataBuilder(data_source='C:/python/practice2/AIBuilder/tests/data/test_data.csv',
                                    target_column='target_1',
@@ -275,10 +289,10 @@ class TestScrubAdapter(unittest.TestCase):
         self.scrub_adapter.add_scrubber(self.scrubber_four)
 
     def test_add_scrubber(self):
-        self.assertIn(self.scrubber_one, self.scrub_adapter.and_scrubber.scrubber_list)
-        self.assertIn(self.scrubber_two, self.scrub_adapter.and_scrubber.scrubber_list)
-        self.assertIn(self.scrubber_three, self.scrub_adapter.and_scrubber.scrubber_list)
-        self.assertIn(self.scrubber_four, self.scrub_adapter.and_scrubber.scrubber_list)
+        self.assertIn(self.scrubber_one, self.scrub_adapter.and_scrubber_training.scrubber_list)
+        self.assertIn(self.scrubber_two, self.scrub_adapter.and_scrubber_training.scrubber_list)
+        self.assertIn(self.scrubber_three, self.scrub_adapter.and_scrubber_training.scrubber_list)
+        self.assertIn(self.scrubber_four, self.scrub_adapter.and_scrubber_training.scrubber_list)
 
     def test_build(self):
         arti = mock.Mock('ScrubAdapter.AbstractAI')
@@ -294,7 +308,7 @@ class TestScrubAdapter(unittest.TestCase):
 
         arti.training_data = training_data
         arti.evaluation_data = evaluation_data
-        self.scrub_adapter.and_scrubber = and_scrubber
+        self.scrub_adapter.and_scrubber_training = and_scrubber
 
         self.scrub_adapter.build(arti)
 

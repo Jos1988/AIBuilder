@@ -59,12 +59,17 @@ class Builder(ABC, Describer):
 
 class DataBuilder(Builder):
 
-    def __init__(self, data_source: str, target_column: str, data_columns: list, weight_column: str = None):
+    def __init__(self, data_source: str, target_column: str, data_columns: list, eval_data_source: str = None,
+                 weight_column: str = None):
         super().__init__()
         self.data_columns = DataTypeSpecification('columns', data_columns, list)
         self.data_source = DataTypeSpecification('data_source', data_source, str)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
+        self.eval_data_source = NullSpecification('eval_data_source')
         self.weight_column = NullSpecification('weight_column')
+
+        if None is not eval_data_source:
+            self.eval_data_source = DataTypeSpecification('eval_data_source', eval_data_source, str)
 
         if None is not weight_column:
             self.weight_column = DataTypeSpecification('weight_column', weight_column, str)
@@ -84,29 +89,55 @@ class DataBuilder(Builder):
         self.validate_specifications()
 
     def build(self, ai: AbstractAI):
-        data = self.load_data()
-        data.set_target_column(self.target_column())
-        data.set_weight_column(self.weight_column())
+        data = self.load_data(self.data_source())
         ai.set_training_data(data)
 
-    def load_data(self) -> DataModel:
-        loader = DataLoader()
+        if self.eval_data_source() is not None:
+            validation_data = self.load_data(self.eval_data_source())
+            ai.set_evaluation_data(validation_data)
 
-        self.load_file(loader)
+    def load_data(self, data_source: str) -> DataModel:
+        loader = self.load_file(data_source)
 
         columns = self.data_columns().copy()
         columns.append(self.target_column())
         columns.append(self.weight_column())
         loader.filter_columns(set(columns))
 
-        return loader.get_dataset()
+        data = loader.get_dataset()
+        data.set_target_column(self.target_column())
+        data.set_weight_column(self.weight_column())
 
-    def load_file(self, loader: DataLoader):
-        if 'csv' in self.data_source():
-            loader.load_csv(self.data_source())
-            return
+        return data
+
+    def load_file(self, data_source: str) -> DataLoader:
+        loader = DataLoader()
+
+        if 'csv' in data_source:
+            loader.load_csv(data_source)
+            return loader
 
         raise RuntimeError('Failed to load data from {}.'.format(self.data_source()))
+
+
+class NullDataSplitterBuilder(Builder):
+
+    def validate(self):
+        pass
+
+    @property
+    def dependent_on(self) -> list:
+        return [
+            self.DATA_MODEL,  # Need data to split
+            self.SCRUBBER,  # Scrub data as one data set because m_hot column scrubber adds new columns based on
+        ]  # data in the current set.
+
+    @property
+    def builder_type(self) -> str:
+        return self.DATA_SPLITTER
+
+    def build(self, neural_net: AbstractAI):
+        pass
 
 
 class DataSplitterBuilder(Builder):
@@ -116,6 +147,8 @@ class DataSplitterBuilder(Builder):
     def __init__(self, evaluation_data_perc: int, data_source: str, random_seed: Optional[int] = None):
         """ Splits data already set on the ml model, using either the training data or evaluation data as source.
         The respective data is then split and loaded back into the training and evaluation data of the model.
+
+        todo: perhaps the data builder should split the data.
 
         :param evaluation_data_perc: Percentage of data that will be cut of from data in data source and set to
                                      evaluation data of the ml model.
@@ -422,10 +455,15 @@ class OptimizerBuilder(Builder):
 
 
 class ScrubAdapter(Builder):
+    TRAINING_DATA = 'training_data'
+    EVALUATION_DATA = 'evaluation_data'
+
+    VALID_DATA_TARGET = [TRAINING_DATA, EVALUATION_DATA]
 
     def __init__(self, scrubbers: list = None):
         super().__init__()
-        self.and_scrubber = scrubber.AndScrubber()
+        self.and_scrubber_training = scrubber.AndScrubber()
+        self.and_scrubber_validation = scrubber.AndScrubber()
         self.descriptor = Descriptor('scrubbers', None)
         if scrubbers is not None:
             for new_scrubber in scrubbers:
@@ -440,13 +478,29 @@ class ScrubAdapter(Builder):
     def builder_type(self) -> str:
         return self.SCRUBBER
 
-    def add_scrubber(self, scrubber: scrubber.Scrubber):
-        self.and_scrubber.add_scrubber(scrubber)
-        self.descriptor.add_description(scrubber.__class__.__name__)
+    def add_scrubber(self, scrubber: scrubber.Scrubber, scrubber_target: str = None):
+        """ Add a scrubber to both and_scrubbers, if a target is specified the scrubber will only be added to the
+        respective and_scrubber
+        """
+
+        assert scrubber_target is None or scrubber_target in self.VALID_DATA_TARGET, \
+            'Invalid data target: {}'.format(scrubber_target)
+
+        if scrubber_target is None or scrubber_target is self.TRAINING_DATA:
+            self.and_scrubber_training.add_scrubber(scrubber)
+
+        if scrubber_target is None or scrubber_target is self.EVALUATION_DATA:
+            self.and_scrubber_validation.add_scrubber(scrubber)
+
+        description_postfix = ''
+        if scrubber_target is not None:
+            description_postfix = ' (' + scrubber_target + ')'
+
+        self.descriptor.add_description(scrubber.__class__.__name__ + description_postfix)
 
     def describe(self):
         return {'scrubber_names': super(ScrubAdapter, self).describe(),
-                'scrubbers': self.and_scrubber.describe()}
+                'scrubbers': self.and_scrubber_training.describe()}
 
     def validate(self):
         pass
@@ -456,12 +510,12 @@ class ScrubAdapter(Builder):
         validation_data = neural_net.evaluation_data
 
         if training_data is not None:
-            self.and_scrubber.validate_metadata(deepcopy(training_data.metadata))
-            self.and_scrubber.scrub(training_data)
+            self.and_scrubber_training.validate_metadata(deepcopy(training_data.metadata))
+            self.and_scrubber_training.scrub(training_data)
 
         if validation_data is not None:
-            self.and_scrubber.validate_metadata(deepcopy(validation_data.metadata))
-            self.and_scrubber.scrub(validation_data)
+            self.and_scrubber_validation.validate_metadata(deepcopy(validation_data.metadata))
+            self.and_scrubber_validation.scrub(validation_data)
 
 
 class MetadataBuilder(Builder):

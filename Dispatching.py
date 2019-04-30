@@ -4,13 +4,11 @@ from typing import List
 
 from AIBuilder import AITester
 from AIBuilder.AIFactory import AIFactory
-from AIBuilder.AIFactory.Logging import MetaLogger, CSVReader
+from AIBuilder.AIFactory.Logging import CSVReader, MetaLogger, SummaryLogger
 from AIBuilder.AIFactory.Printing import TesterPrinter, ConsolePrintStrategy, ReportPrintStrategy, \
     FactoryPrinter
 
-
 class Session:
-    meta_logger: MetaLogger
 
     def __init__(self, project_name: str, log_dir: str):
         self.session_data = {}
@@ -150,22 +148,22 @@ class PreRunObserver(Observer):
 
 
 class PreRunLogObserver(Observer):
+    meta_log_file_name = 'meta_log.csv'
+    summary_file_name = 'summary.csv'
 
     @property
     def observed_event_names(self) -> List[str]:
         return [KernelDispatcher.PRE_RUN]
 
+    def check_logfile(self, log_file_path: Path, event: TesterEvent):
+        if not log_file_path.is_file():
+            return
+
+        self.check_logfile_compatible(log_file_path=log_file_path, event=event)
+
+    @abstractmethod
     def execute(self, event: Event):
-        assert type(event) is TesterEvent
-        event: TesterEvent
-
-        log_file_path = Path(self.get_path(event))
-
-        if log_file_path.is_file():
-            self.check_logfile_compatible(log_file_path, event=event)
-
-        meta_logger = self.load_meta_logger(event, path=log_file_path)
-        event.session.meta_logger = meta_logger
+        pass
 
     def check_logfile_compatible(self, log_file_path: Path, event: TesterEvent):
         attributes = event.session.session_data['meta_logging']['attributes']
@@ -179,8 +177,8 @@ class PreRunLogObserver(Observer):
         if False is reader.check_compatible(log_file_path):
             raise AssertionError('Meta log file not compatible, expecting following headers: {}'.format(reader.all_names))
 
-    def get_path(self, event) -> str:
-        return event.session.log_dir + '/' + event.session.project_name + '/meta_log.csv'
+    def get_path(self, event: Event, file_name: str) -> str:
+        return event.session.log_dir + '/' + event.session.project_name + '/' + file_name
 
     def load_meta_logger(self, event, path: Path):
         meta_logger = MetaLogger(
@@ -188,6 +186,57 @@ class PreRunLogObserver(Observer):
             log_metrics=event.session.session_data['meta_logging']['metrics'],
             discrimination_value=event.session.session_data['meta_logging']['discriminator'],
             log_file_path=path
+        )
+
+        return meta_logger
+
+
+class PreRunLoadMetaLogger(PreRunLogObserver):
+
+    def execute(self, event: Event):
+        assert type(event) is TesterEvent
+        event: TesterEvent
+
+        meta_log_file_path = Path(self.get_path(event, self.meta_log_file_name))
+
+        if meta_log_file_path.is_file():
+            self.check_logfile_compatible(meta_log_file_path, event=event)
+
+        meta_logger = self.load_meta_logger(event, path=meta_log_file_path)
+        event.session.meta_logger = meta_logger
+
+    def load_meta_logger(self, event, path: Path):
+        meta_logger = MetaLogger(
+            log_attributes=event.session.session_data['meta_logging']['attributes'],
+            log_metrics=event.session.session_data['meta_logging']['metrics'],
+            discrimination_value=event.session.session_data['meta_logging']['discriminator'],
+            log_file_path=path
+        )
+
+        return meta_logger
+
+
+class PreRunLoadSummaryLogger(PreRunLogObserver):
+
+    def execute(self, event: Event):
+        assert type(event) is TesterEvent
+        event: TesterEvent
+
+        meta_log_file_path = Path(self.get_path(event, self.meta_log_file_name))
+        self.check_logfile(meta_log_file_path, event)
+        summary_path = Path(self.get_path(event, self.summary_file_name))
+        self.check_logfile(summary_path, event)
+
+        meta_logger = self.load_summary_logger(event, meta_log_path=meta_log_file_path, summary_path=summary_path)
+        event.session.summary_logger = meta_logger
+
+    def load_summary_logger(self, event, meta_log_path: Path, summary_path: Path):
+        meta_logger = SummaryLogger(
+            log_attributes=event.session.session_data['meta_logging']['attributes'],
+            log_metrics=event.session.session_data['meta_logging']['metrics'],
+            discrimination_value=event.session.session_data['meta_logging']['discriminator'],
+            log_file_path=meta_log_path,
+            summary_log_file_path=summary_path
         )
 
         return meta_logger
@@ -295,7 +344,9 @@ class PostEvaluationLogObserver(Observer):
 
         self.update_report(event)
         self.update_meta_report(event)
-        event.session.meta_logger.save_to_csv()
+        self.update_summary(event)
+        event.session.meta_logger.save_logged_data()
+        event.session.summary_logger.save_logged_data()
 
     def update_report(self, event):
         report = event.tester.get_report_file('a')
@@ -312,4 +363,7 @@ class PostEvaluationLogObserver(Observer):
         report_printer.output.close_report()
 
     def update_meta_report(self, event):
-        event.session.meta_logger.log_ml_model(event.tester.ml_model)
+        event.session.meta_logger.add_ml_model(event.tester.ml_model)
+
+    def update_summary(self, event):
+        event.session.summary_logger.add_ml_model(event.tester.ml_model)

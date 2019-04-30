@@ -4,7 +4,7 @@ from AIBuilder.AITester import AITester, GainBasedFeatureImportance, AccuracyBas
 from AIBuilder.Dispatching import KernelDispatcher, FactoryEvent, TesterEvent, ModelNotUniqueObserver, \
     PreCreateObserver, \
     PreTrainObserver, PostTrainObserver, PreEvaluationObserver, PostEvaluationObserver, Session, PreRunObserver, \
-    PostRunObserver, PreRunLogObserver, PostEvaluationLogObserver
+    PostRunObserver, PreRunLogObserver, PostEvaluationLogObserver, PreRunLoadMetaLogger, PreRunLoadSummaryLogger
 from AIBuilder.Summizer import TimeSummizer
 
 
@@ -32,7 +32,8 @@ class Kernel:
         self.dispatcher.addObserver(PostRunObserver())
 
         if True is not self.no_log:
-            self.dispatcher.addObserver(PreRunLogObserver())
+            self.dispatcher.addObserver(PreRunLoadMetaLogger())
+            self.dispatcher.addObserver(PreRunLoadSummaryLogger())
             self.dispatcher.addObserver(PostEvaluationLogObserver())
 
         # self.dispatcher.dispatch(KernelDispatcher.PRE_BOOT) pre-boot hook

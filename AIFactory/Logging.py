@@ -1,4 +1,5 @@
 import csv
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List
 
@@ -8,11 +9,14 @@ from AIBuilder import AI
 
 
 class LogRecord:
+    """ Record of one ml model that has been trained an evaluated.
+    """
+
     attributes: dict
     metrics: dict
     grouping_values: dict
 
-    def __init__(self, attributes: dict, metrics: dict = None, discrimination_value: str = None):
+    def __init__(self, attributes: dict, metrics: dict = None, discriminator_name: str = None):
 
         self.attributes = {}
         if attributes is not None:
@@ -24,7 +28,7 @@ class LogRecord:
             for metr_name, metr_value in metrics.items():
                 self.add_metric(metr_name, metr_value)
 
-        self.discrimination_value = discrimination_value
+        self.discriminator_name = discriminator_name
         if metrics is None:
             self.metrics = {}
 
@@ -47,15 +51,23 @@ class LogRecord:
 
     def get_group_values(self) -> dict:
         non_group_values = self.attributes.copy()
-        non_group_values.pop(self.discrimination_value)
+        non_group_values.pop(self.discriminator_name)
 
         return non_group_values
 
     def is_same_group(self, record):
+        """ Check if record attributes are equal. If so they should be place in the same group in the respective
+        collection as they represent results from the same architecture.
+        """
         return self.get_group_values() == record.get_group_values()
 
 
 class RecordCollection:
+    """ Collection of records organize in groups, a group represents ml models with the same architecture (attributes).
+    This way we can observe performance of the architecture across different instances.
+    Models in the same group should differ by discriminator. The discriminator functions as a 'seed' adding some
+    aspect of random variation to the model.
+    """
     record_groups: List[List[LogRecord]]
 
     def __init__(self, log_attributes: List[str], log_metrics: List[str], discriminator: str):
@@ -65,7 +77,9 @@ class RecordCollection:
         self.discriminator = discriminator
         self.record_groups = []
 
-    def get_records(self):
+    def get_records(self) -> List[LogRecord]:
+        """ Return list of all records from all groups
+        """
         records = []
         for group in self.record_groups:
             records += group
@@ -73,6 +87,9 @@ class RecordCollection:
         return records
 
     def is_same_format(self, record: LogRecord):
+        """ Check if record fit the format of the collection, meaning, it has the same attributes, discriminator and
+        metrics.
+        """
         return set(record.get_all_value_names()) == set(self.all_values)
 
     def add(self, record: LogRecord):
@@ -143,6 +160,7 @@ class CSVReader:
         return len(missing_columns) is 0
 
     def load_csv(self, file) -> RecordCollection:
+        """ Load CSV log file and returns respective records."""
         csv_reader = csv.DictReader(file)
         loaded_records = RecordCollection(self.attribute_names, self.metric_names, self.discriminator)
         for csv_record in csv_reader:
@@ -172,23 +190,34 @@ class CSVReader:
             else:
                 metrics[field_name] = field_value
 
-        return LogRecord(attributes=attributes, metrics=metrics, discrimination_value=self.discriminator)
+        return LogRecord(attributes=attributes, metrics=metrics, discriminator_name=self.discriminator)
 
 
-class CSVConverter:
+class CSVFormatter(ABC):
 
     def __init__(self, file, record_collection: RecordCollection):
+        """ Writes a collection to a csv file. """
         self.writer = csv.DictWriter(file, fieldnames=record_collection.all_values)
         self.record_collection = record_collection
 
     @staticmethod
-    def generate_summary(group):
+    def generate_group_summary(group: List[LogRecord], write_attributes: bool) -> dict:
         summary_data_keys = group[0].get_all_value_names()
-        metric_names = group[0].metrics.keys()
+        discriminator = group[0].discriminator_name
+        attribute_names = group[0].attributes.keys()
+
         summary = {}
         for label in summary_data_keys:
-            if label not in metric_names:
+            if discriminator is not None and label == discriminator:
+                summary[label] = 'n={}'.format(len(group))
+                continue
+
+            if False is write_attributes and label in attribute_names:
                 summary[label] = ''
+                continue
+
+            if label in attribute_names:
+                summary[label] = group[0].attributes[label]
                 continue
 
             all_label_values = []
@@ -207,30 +236,46 @@ class CSVConverter:
 
         return empty_dict
 
-    def writeRecord(self, record: LogRecord):
+    def write_record(self, record: LogRecord):
         self.writer.writerow(record.get_all_values())
 
     def write_empty_row(self, record: LogRecord):
         empty_values = self.empty_dict_values(record.get_all_values())
         self.writer.writerow(empty_values)
 
-    def write_group_summary(self, group: List[LogRecord]):
-        summary = self.generate_summary(group)
+    def write_group_summary(self, group: List[LogRecord], write_attributes: bool = False):
+        summary = self.generate_group_summary(group, write_attributes)
         self.writer.writerow(summary)
 
-    def writeCollection(self, record_collection: RecordCollection):
+    @abstractmethod
+    def write_csv(self):
+        pass
+
+
+class CSVMetaLogFormatter(CSVFormatter):
+    def write_collection(self, record_collection: RecordCollection):
         for group in record_collection.record_groups:
             for record in group:
-                self.writeRecord(record)
+                self.write_record(record)
             self.write_group_summary(group)
             self.write_empty_row(group[0])
 
-    def writeMetaLog(self):
+    def write_csv(self):
         self.writer.writeheader()
-        self.writeCollection(self.record_collection)
+        self.write_collection(self.record_collection)
 
 
-class MetaLogger:
+class CSVSummaryLogFormatter(CSVFormatter):
+    def write_collection(self, record_collection: RecordCollection):
+        for group in record_collection.record_groups:
+            self.write_group_summary(group, write_attributes=True)
+
+    def write_csv(self):
+        self.writer.writeheader()
+        self.write_collection(self.record_collection)
+
+
+class CSVLogger(ABC):
     log_attributes: List[str]
     discrimination_value: str
     record_collection: RecordCollection
@@ -249,7 +294,7 @@ class MetaLogger:
 
         self.record_collection = RecordCollection(self.log_attributes, self.log_metrics, self.discrimination_value)
 
-    def log_ml_model(self, model: AI):
+    def add_ml_model(self, model: AI):
         assert hasattr(model, 'description'), 'not description set on model.'
 
         model_data = {}
@@ -257,10 +302,11 @@ class MetaLogger:
         model_data.update(model.results)
 
         record = self.create_record_from_dict(model_description=model.description, metrics=model.results)
+
         self.record_collection.add(record)
 
     def create_record_from_dict(self, model_description: dict, metrics: dict) -> LogRecord:
-        record = LogRecord({}, discrimination_value=self.discrimination_value)
+        record = LogRecord({}, discriminator_name=self.discrimination_value)
         self.load_attributes(model_description, record)
         self.load_metrics(metrics, record)
 
@@ -306,28 +352,65 @@ class MetaLogger:
 
         return results
 
-    def save_to_csv(self):
+    @abstractmethod
+    def save_logged_data(self):
+        pass
+
+    def Load_records_from_log(self, records_to_save: RecordCollection):
+        reader = CSVReader(self.log_attributes, self.log_metrics, self.discrimination_value)
+
+        assert reader.check_compatible(self.log_file_path)
+
+        file = self.log_file_path.open(mode='r', newline='')
+        existing_records = reader.load_csv(file)
+
+        for record in existing_records.get_records():
+            records_to_save.add(record)
+
+        file.close()
+
+
+class MetaLogger(CSVLogger):
+
+    def save_logged_data(self):
         records_to_save = self.record_collection
 
         if 0 is len(records_to_save):
             return
 
         if self.log_file_path.is_file():
-            reader = CSVReader(self.log_attributes, self.log_metrics, self.discrimination_value)
-
-            assert reader.check_compatible(self.log_file_path)
-
-            file = self.log_file_path.open(mode='r', newline='')
-            existing_records = reader.load_csv(file)
-
-            for record in existing_records.get_records():
-                records_to_save.add(record)
-
-            file.close()
+            self.Load_records_from_log(records_to_save)
             self.log_file_path.unlink()
 
         file = self.log_file_path.open(mode='w', newline='')
-        converter = CSVConverter(file, records_to_save)
-        converter.writeMetaLog()
+
+        converter = CSVMetaLogFormatter(file, records_to_save)
+        converter.write_csv()
+
+        self.record_collection.clear()
+        file.close()
+
+
+class SummaryLogger(CSVLogger):
+
+    def __init__(self, log_attributes: List[str], log_metrics: List[str], discrimination_value: str,
+                 log_file_path: Path, summary_log_file_path: Path):
+
+        super().__init__(log_attributes, log_metrics, discrimination_value, log_file_path)
+
+        self.summary_log_file_path = summary_log_file_path
+
+    def save_logged_data(self):
+        records_to_save = self.record_collection
+
+        if 0 is len(records_to_save):
+            return
+
+        if self.log_file_path.is_file():
+            self.Load_records_from_log(records_to_save)
+
+        file = self.summary_log_file_path.open(mode='w', newline='')
+        converter = CSVSummaryLogFormatter(file, records_to_save)
+        converter.write_csv()
         self.record_collection.clear()
         file.close()
