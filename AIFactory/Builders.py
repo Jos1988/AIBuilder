@@ -582,13 +582,13 @@ class FeatureColumnBuilder(Builder):
 
     def __init__(self, feature_columns: dict, feature_config: dict = None):
         super().__init__()
-        self.feature_config = feature_config
+        self.feature_config = DataTypeSpecification('feature_config', feature_config, dict)
         self.feature_columns = FeatureColumnsSpecification('feature_columns', [], FeatureColumnStrategy.ALL_COLUMNS)
 
         for name, type in feature_columns.items():
             if type is FeatureColumnStrategy.BUCKETIZED_COLUMN:
                 assert name in feature_config, 'Missing configuration for bucketized column: {}.'.format(name)
-                assert 'buckets' in self.feature_config[name], \
+                assert 'buckets' in self.feature_config()[name], \
                     'Missing buckets configuration for bucketized column: {}.'.format(name)
 
             self.add_feature_column(name=name, column_type=type)
@@ -624,9 +624,7 @@ class FeatureColumnBuilder(Builder):
     def build_feature_columns(self, data_model):
         self.validate_target_not_in_features(data_model)
 
-        feature_columns = self.render_tf_feature_columns(data_model=data_model)
-        data_model.set_tf_feature_columns(feature_columns)
-
+        self.render_tf_feature_columns(data_model=data_model)
         self.add_feature_col_names_to_data_model(data_model)
 
     def add_feature_col_names_to_data_model(self, data_model):
@@ -634,7 +632,9 @@ class FeatureColumnBuilder(Builder):
 
             if column_data['type'] is FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS:
                 self.load_bin_column_names(column_data['name'], data_model)
+                continue
 
+            if column_data['type'] is FeatureColumnStrategy.CROSSED_COLUMN:
                 continue
 
             data_model.add_feature_column(column_data['name'])
@@ -652,14 +652,12 @@ class FeatureColumnBuilder(Builder):
         assert target_column not in self.feature_columns(), 'Feature column \'{}\' is already set as target column' \
             .format(target_column)
 
-    def render_tf_feature_columns(self, data_model: DataModel) -> list:
-        tf_feature_columns = []
+    def render_tf_feature_columns(self, data_model: DataModel):
         for feature_column_info in self.feature_columns():
             column_strategy = FeatureColumnStrategyFactory.get_strategy(feature_column_info['name'],
                                                                         feature_column_info['type'],
                                                                         data_model,
-                                                                        self.feature_config)
+                                                                        self.feature_config())
             feature_columns = column_strategy.build()
-            tf_feature_columns = feature_columns + tf_feature_columns
-
-        return tf_feature_columns
+            for tf_feature_column in feature_columns:
+                data_model.add_tf_feature_columns(tf_feature_column)

@@ -12,9 +12,10 @@ class FeatureColumnStrategy(ABC):
     CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
     MULTIPLE_HOT_COLUMNS = 'multiple_hot_columns'
     BUCKETIZED_COLUMN = 'bucketized_column'
+    CROSSED_COLUMN = 'crossed_column'
 
     ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,
-                   INDICATOR_COLUMN_VOC_LIST, MULTIPLE_HOT_COLUMNS, BUCKETIZED_COLUMN]
+                   INDICATOR_COLUMN_VOC_LIST, MULTIPLE_HOT_COLUMNS, BUCKETIZED_COLUMN, CROSSED_COLUMN]
 
     def __init__(self, column_name: str, data_model: DataModel, feature_config: dict = None):
         self.feature_config = feature_config
@@ -212,6 +213,39 @@ class BucketizedColumnStrategy(FeatureColumnStrategy):
         return [FeatureColumnStrategy.BUCKETIZED_COLUMN]
 
 
+class CrossedColumnStrategy(FeatureColumnStrategy):
+
+    def build_column(self):
+        current_columns = self.data_model.get_tf_feature_columns()
+
+        assert 'columns' in self.feature_config, 'columns config key not passed to crossed column strategy.'
+        assert 'num_buckets' in self.feature_config, 'num_bucket config key not passed to crossed column strategy.'
+
+        column_names = self.feature_config['columns']
+        num_buckets = self.feature_config['num_buckets']
+
+        columns_to_cross = []
+        for name in column_names:
+            for column in current_columns:
+                if name in column.name:
+                    columns_to_cross.append(column)
+
+        assert 2 is len(columns_to_cross), 'Two columns must be crossed found {}, looked for "{}" in "{}"'\
+            .format(len(columns_to_cross), column_names, current_columns)
+
+        crossed_tf_column = tf.feature_column.crossed_column(columns_to_cross, num_buckets)
+
+        return [crossed_tf_column]
+
+    def validate_result(self):
+        for result in self.results:
+            assert result.__class__.__name__ == 'CrossedColumn'
+
+    @staticmethod
+    def column_types() -> list:
+        return [FeatureColumnStrategy.CROSSED_COLUMN]
+
+
 class FeatureColumnStrategyFactory:
     strategies = [
         NumericColumnStrategy,
@@ -219,7 +253,8 @@ class FeatureColumnStrategyFactory:
         CategoricalColumnWithVOCListStrategy,
         IndicatorColumnWithVOCListStrategy,
         MultipleHotFeatureStrategy,
-        BucketizedColumnStrategy
+        BucketizedColumnStrategy,
+        CrossedColumnStrategy,
     ]  # type: List[FeatureColumnStrategy]
 
     @staticmethod

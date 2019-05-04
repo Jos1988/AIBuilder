@@ -765,6 +765,32 @@ class CategoryToFloatScrubber(ConvertToColumnScrubber):
                          required_columns={source_column_name: MetaData.CATEGORICAL_DATA_TYPE})
 
 
+class ColumnBinner(Scrubber):
+
+    def __init__(self, source_column_name: str, target_column_name: str, bins: list, labels: list):
+        self.source_column_name = DataTypeSpecification('source_column_name', source_column_name, str)
+        self.target_column_name = DataTypeSpecification('target_column_name', target_column_name, str)
+        self.bins = DataTypeSpecification('bins', bins, list)
+        self.labels = DataTypeSpecification('labels', labels, list)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.source_column_name(): MetaData.NUMERICAL_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        assert self.source_column_name() in data_model.get_dataframe()
+
+    def update_metadata(self, meta_data: MetaData):
+        meta_data.add_column_to_type(column_name=self.target_column_name(), column_type=MetaData.CATEGORICAL_DATA_TYPE)
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        df[self.target_column_name()] = pd.cut(df[self.source_column_name()], bins=self.bins(), labels=self.labels())
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
 class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
     """ Search for keyword in text to determine category.
     """

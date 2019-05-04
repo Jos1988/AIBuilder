@@ -111,7 +111,6 @@ class MetaData:
 
 class DataModel:
     _dataframe: pd.DataFrame
-    _tf_feature_columns: list
     # todo: really use all these getters and setters?
 
     def __init__(self, data: pd.DataFrame):
@@ -119,6 +118,7 @@ class DataModel:
         self._dataframe = data
         # todo use metadata object instead?
         self.feature_columns_names = []
+        self._tf_feature_columns = []
         self.target_column_name = None
         self.weight_column_name = None
 
@@ -140,6 +140,9 @@ class DataModel:
 
     def set_tf_feature_columns(self, feature_columns: list):
         self._tf_feature_columns = feature_columns
+
+    def add_tf_feature_columns(self, feature_column):
+        self._tf_feature_columns.append(feature_column)
 
     def get_tf_feature_columns(self):
         return self._tf_feature_columns
