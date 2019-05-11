@@ -19,6 +19,10 @@ class Session:
         data = {'attributes': model_attributes, 'metrics': metrics, 'discriminator': discriminator}
         self.session_data['meta_logging'] = data
 
+    def set_prediction_data(self, categories: list):
+        data = {'categories': categories}
+        self.session_data['prediction'] = data
+
 
 class Event(ABC):
 

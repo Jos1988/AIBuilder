@@ -1,6 +1,11 @@
+from typing import List
+
+import numpy as np
+
+from AIBuilder.AI import AI
 from AIBuilder.AIFactory.AIFactory import AIFactory
 from AIBuilder.AIFactory.Builders import Builder
-from AIBuilder.AITester import AITester, GainBasedFeatureImportance, AccuracyBaselineDiff
+from AIBuilder.AITester import AITester, GainBasedFeatureImportance, AccuracyBaselineDiff, Predictor
 from AIBuilder.Dispatching import KernelDispatcher, FactoryEvent, TesterEvent, ModelNotUniqueObserver, \
     PreCreateObserver, \
     PreTrainObserver, PostTrainObserver, PreEvaluationObserver, PostEvaluationObserver, Session, PreRunObserver, \
@@ -9,29 +14,40 @@ from AIBuilder.Summizer import TimeSummizer
 
 
 class Kernel:
+    model: AI
+    all_models = List[AI]
 
     def __init__(self, session: Session, **kwargs):
+        self.all_models = []
+        self.model = None
         self.session = session
         self.factory = None
         self.tester = None
         self.dispatcher = None
         self.no_log = False
+        self.prediction_results = None
 
         if 'no_log' in kwargs:
             self.no_log = kwargs['no_log']
 
-    def boot(self):
+    def boot(self, evaluate: bool = True, predict = False):
+        self.evaluate = evaluate
+        self.predict = predict
+
         self.dispatcher = KernelDispatcher()
         self.dispatcher.addObserver(PreRunObserver())
         self.dispatcher.addObserver(ModelNotUniqueObserver())
         self.dispatcher.addObserver(PreCreateObserver())
         self.dispatcher.addObserver(PreTrainObserver())
         self.dispatcher.addObserver(PostTrainObserver())
-        self.dispatcher.addObserver(PreEvaluationObserver())
-        self.dispatcher.addObserver(PostEvaluationObserver())
+
+        if self.evaluate:
+            self.dispatcher.addObserver(PreEvaluationObserver())
+            self.dispatcher.addObserver(PostEvaluationObserver())
+
         self.dispatcher.addObserver(PostRunObserver())
 
-        if True is not self.no_log:
+        if True is not self.no_log and self.evaluate:
             self.dispatcher.addObserver(PreRunLoadMetaLogger())
             self.dispatcher.addObserver(PreRunLoadSummaryLogger())
             self.dispatcher.addObserver(PostEvaluationLogObserver())
@@ -47,9 +63,14 @@ class Kernel:
         accuracy_diff = AccuracyBaselineDiff()
 
         self.tester = AITester(summizer=summizer, evaluators=[feature_importance, accuracy_diff])
+
+        if self.predict:
+            self.predictor = Predictor(categories=self.session.session_data['prediction']['categories'])
+
         # self.dispatcher.dispatch(KernelDispatcher.POST_BOOT) post-boot hook
 
     def run(self):
+        self.model = None
         pre_run_event = TesterEvent(event_name=KernelDispatcher.PRE_RUN, session=self.session, tester=self.tester)
         self.dispatcher.dispatch(pre_run_event)
         while self.factory.has_next_ai():
@@ -60,8 +81,12 @@ class Kernel:
                 continue
 
             self.doTrainModel()
+            self.all_models.append(self.model)
+            if self.evaluate:
+                self.doEvaluateModel()
 
-            self.doEvaluateModel()
+        if self.predict:
+            self.prediction_results = self.doPredict()
 
         post_run_event = TesterEvent(event_name=KernelDispatcher.POST_RUN, session=self.session, tester=self.tester)
         self.dispatcher.dispatch(post_run_event)
@@ -97,6 +122,19 @@ class Kernel:
         self.dispatcher.dispatch(pre_create_event)
 
         model = self.factory.create_next_ai()
+        self.model = model
         self.tester.loadModel(model)
 
         # self.dispatcher.dispatch(KernelDispatcher.POST_CREATE) post-create hook.
+
+    def doPredict(self):
+        print('=======================================')
+        print('start prediction')
+        print('=======================================')
+        results = self.predictor.predict(self.all_models)
+        print('=======================================')
+        print('finished prediction')
+        print('=======================================')
+        # dispatch post predict event
+
+        return results

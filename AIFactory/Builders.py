@@ -4,7 +4,7 @@ from copy import deepcopy
 from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategyFactory, OptimizerStrategy
-from AIBuilder.AIFactory.Specifications import Specification, ConfigDescriber, PrefixedDictSpecification, Describer
+from AIBuilder.AIFactory.Specifications import ConfigDescriber, PrefixedDictSpecification, Describer
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
@@ -59,17 +59,25 @@ class Builder(ABC, Describer):
 
 class DataBuilder(Builder):
 
-    def __init__(self, data_source: str, target_column: str, data_columns: list, eval_data_source: str = None,
-                 weight_column: str = None):
+    def __init__(self, target_column: str, data_columns: list, data_source: str = None, eval_data_source: str = None,
+                 prediction_data_source: str = None, weight_column: str = None):
         super().__init__()
         self.data_columns = DataTypeSpecification('columns', data_columns, list)
-        self.data_source = DataTypeSpecification('data_source', data_source, str)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
-        self.eval_data_source = NullSpecification('eval_data_source')
         self.weight_column = NullSpecification('weight_column')
+
+        self.data_source = NullSpecification('data_source')
+        self.eval_data_source = NullSpecification('eval_data_source')
+        self.prediction_data_source = NullSpecification('prediction_data_source')
+
+        if None is not data_source:
+            self.data_source = DataTypeSpecification('data_source', data_source, str)
 
         if None is not eval_data_source:
             self.eval_data_source = DataTypeSpecification('eval_data_source', eval_data_source, str)
+
+        if None is not prediction_data_source:
+            self.prediction_data_source = DataTypeSpecification('prediction_data_source', prediction_data_source, str)
 
         if None is not weight_column:
             self.weight_column = DataTypeSpecification('weight_column', weight_column, str)
@@ -89,12 +97,17 @@ class DataBuilder(Builder):
         self.validate_specifications()
 
     def build(self, ai: AbstractAI):
-        data = self.load_data(self.data_source())
-        ai.set_training_data(data)
+        if self.data_source() is not None:
+            data = self.load_data(self.data_source())
+            ai.set_training_data(data)
 
         if self.eval_data_source() is not None:
             validation_data = self.load_data(self.eval_data_source())
             ai.set_evaluation_data(validation_data)
+
+        if self.prediction_data_source() is not None:
+            prediction_data = self.load_data(self.prediction_data_source())
+            ai.set_prediction_data(prediction_data)
 
     def load_data(self, data_source: str) -> DataModel:
         loader = self.load_file(data_source)
@@ -110,6 +123,18 @@ class DataBuilder(Builder):
 
         return data
 
+    def load_prediction_data(self, data_source: str) -> DataModel:
+        loader = self.load_file(data_source)
+
+        columns = self.data_columns().copy()
+        columns.append(self.weight_column())
+        loader.filter_columns(set(columns))
+
+        data = loader.get_dataset()
+        data.set_weight_column(self.weight_column())
+
+        return data
+
     def load_file(self, data_source: str) -> DataLoader:
         loader = DataLoader()
 
@@ -120,7 +145,27 @@ class DataBuilder(Builder):
         raise RuntimeError('Failed to load data from {}.'.format(self.data_source()))
 
 
-class NullDataSplitterBuilder(Builder):
+class DataSplitterBuilder(Builder):
+
+    def __init__(self, random_seed: int = None):
+        super().__init__()
+        self.randomize = DataTypeSpecification('splitter_randomize', False, bool)
+        self.seed = NullSpecification('splitter_seed')
+        if random_seed is not None:
+            self.randomize = DataTypeSpecification('splitter_randomize', True, bool)
+            self.seed = DataTypeSpecification('splitter_seed', random_seed, int)
+
+    @staticmethod
+    def randomize_data(data: DataModel, seed: int):
+        df = data.get_dataframe()
+        df = df.sample(frac=1, random_state=seed)
+        data.set_dataframe(df)
+
+
+class NullDataSplitterBuilder(DataSplitterBuilder):
+
+    def __init__(self, random_seed: int = None):
+        super().__init__(random_seed)
 
     def validate(self):
         pass
@@ -137,10 +182,22 @@ class NullDataSplitterBuilder(Builder):
         return self.DATA_SPLITTER
 
     def build(self, neural_net: AbstractAI):
-        pass
+        if not self.randomize():
+            return
+
+        train_data = neural_net.get_training_data()
+        self.randomize_data(train_data, self.seed())
+        neural_net.set_training_data(training_data=train_data)
+
+        eval_data = neural_net.get_evaluation_data()
+        if eval_data is None:
+            return
+
+        self.randomize_data(eval_data, self.seed())
+        neural_net.set_evaluation_data(eval_data)
 
 
-class DataSplitterBuilder(Builder):
+class EvalDataSplitterBuilder(DataSplitterBuilder):
     TRAINING_DATA = 'training'
     EVALUATION_DATA = 'evaluation'
 
@@ -156,7 +213,7 @@ class DataSplitterBuilder(Builder):
         :param random_seed:          If set, seed will be used to shuffle the data before splitting, run multiple
                                      models with different seeds to achieve k-fold evaluation.
         """
-        super().__init__()
+        super().__init__(random_seed)
         self.randomize = DataTypeSpecification('splitter_randomize', False, bool)
         self.seed = NullSpecification('splitter_seed')
         if random_seed is not None:
@@ -191,19 +248,14 @@ class DataSplitterBuilder(Builder):
 
     def build(self, neural_net: AbstractAI):
         data = self.select_data(neural_net)
-        self.randomize_data(data)
+        if self.randomize():
+            self.randomize_data(data, self.seed())
 
         splitter = DataSetSplitter(data_model=data)
         split_data = splitter.split_by_ratio([self.training_data_percentage(), self.evaluation_data_perc()])
 
         neural_net.set_training_data(split_data[0])
         neural_net.set_evaluation_data(split_data[1])
-
-    def randomize_data(self, data: DataModel):
-        if self.randomize():
-            df = data.get_dataframe()
-            df = df.sample(frac=1, random_state=self.seed())
-            data.set_dataframe(df)
 
     def select_data(self, neural_net: AbstractAI) -> DataModel:
         if self.data_source() == self.TRAINING_DATA:
@@ -286,21 +338,37 @@ class InputFunctionBuilder(Builder):
 
     VALID_FN_NAMES = [BASE_FN, PANDAS_FN]
 
-    def __init__(self, train_fn: str, train_kwargs: dict, evaluation_fn: str, evaluation_kwargs: dict):
+    def __init__(self, train_fn: str = None, train_kwargs: dict = None, evaluation_fn: str = None, evaluation_kwargs: dict = None,
+                 prediction_fn: str = None, prediction_kwargs: dict = None):
         super().__init__()
-        self.train_fn_name = TypeSpecification('test_dir function', train_fn, self.VALID_FN_NAMES)
-
-        # todo: do not print training kwargs, when saving description, some of them are objects,
-        #  for example x and y are dataframes.
-        self.train_kwargs = train_kwargs
-        self.train_kwargs_descr = PrefixedDictSpecification('train_kwargs', 'train', train_kwargs)
-
-        self.evaluation_fn_name = TypeSpecification('evaluation function', evaluation_fn, self.VALID_FN_NAMES)
-        # todo: idem.
-        self.evaluation_kwargs = evaluation_kwargs
-        self.evaluation_kwargs_descr = PrefixedDictSpecification('evaluation_kwargs', 'eval', evaluation_kwargs)
-
         self.fn_holder = InputFunctionHolder
+
+        self.build_train = False
+        if train_fn is not None:
+            self.build_train = True
+            self.train_fn_name = TypeSpecification('test_dir function', train_fn, self.VALID_FN_NAMES)
+            # todo: do not print training kwargs, when saving description, some of them are objects,
+            #  for example x and y are dataframes.
+            self.train_kwargs = train_kwargs
+            self.train_kwargs_descr = PrefixedDictSpecification('train_kwargs', 'train', train_kwargs)
+
+        self.build_eval = False
+        if evaluation_fn is not None:
+            self.build_eval = True
+            self.evaluation_fn_name = TypeSpecification('evaluation function', evaluation_fn, self.VALID_FN_NAMES)
+            # todo: idem.
+            self.evaluation_kwargs = evaluation_kwargs
+            self.evaluation_kwargs_descr = PrefixedDictSpecification('evaluation_kwargs', 'eval', evaluation_kwargs)
+
+        self.build_predict = False
+        if prediction_fn is not None:
+            self.build_predict = True
+            self.prediction_fn_name = TypeSpecification('prediction function', prediction_fn, self.VALID_FN_NAMES)
+            # todo: idem.
+            self.prediction_kwargs = prediction_kwargs
+            self.prediction_kwargs_descr = PrefixedDictSpecification('prediction_kwargs', 'pred', prediction_kwargs)
+
+
 
     @property
     def dependent_on(self) -> list:
@@ -327,6 +395,17 @@ class InputFunctionBuilder(Builder):
 
             return fn(**kwargs)
 
+    def assign_prediction_fn(self, data_model: DataModel, fn_name: str, kwargs: dict):
+        if hasattr(self.fn_holder, fn_name):
+            return self.load_from_holder(data_model, fn_name, kwargs)
+
+        if fn_name == self.PANDAS_FN:
+            kwargs['x'] = data_model.get_input_fn_x_data()
+
+            fn = getattr(tf.estimator.inputs, 'pandas_input_fn')
+
+            return fn(**kwargs)
+
     def load_from_holder(self, data_model: DataModel, fn_name: str, kwargs: dict):
         assert hasattr(self.fn_holder, fn_name), 'Function {} not known in function holder.'.format(fn_name)
         assert callable(getattr(self.fn_holder, fn_name)), 'Function {} is not callable.'.format(fn_name)
@@ -339,12 +418,19 @@ class InputFunctionBuilder(Builder):
         self.validate_specifications()
 
     def build(self, neural_net: AbstractAI):
-        train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs)
-        evaluation_function = self.assign_fn(neural_net.evaluation_data, self.evaluation_fn_name(),
-                                             self.evaluation_kwargs)
+        if self.build_train:
+            train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs)
+            neural_net.set_training_fn(train_function)
 
-        neural_net.set_training_fn(train_function)
-        neural_net.set_evaluation_fn(evaluation_function)
+        if self.build_eval:
+            evaluation_function = self.assign_fn(neural_net.evaluation_data, self.evaluation_fn_name(),
+                                                 self.evaluation_kwargs)
+            neural_net.set_evaluation_fn(evaluation_function)
+
+        if self.build_predict:
+            prediction_function = self.assign_prediction_fn(neural_net.prediction_data, self.prediction_fn_name(),
+                                                 self.prediction_kwargs)
+            neural_net.set_prediction_fn(prediction_function)
 
 
 class NamingSchemeBuilder(Builder):
@@ -457,13 +543,15 @@ class OptimizerBuilder(Builder):
 class ScrubAdapter(Builder):
     TRAINING_DATA = 'training_data'
     EVALUATION_DATA = 'evaluation_data'
+    PREDICTION_DATA = 'prediction_data'
 
-    VALID_DATA_TARGET = [TRAINING_DATA, EVALUATION_DATA]
+    VALID_DATA_TARGET = [TRAINING_DATA, EVALUATION_DATA, PREDICTION_DATA]
 
     def __init__(self, scrubbers: list = None):
         super().__init__()
         self.and_scrubber_training = scrubber.AndScrubber()
         self.and_scrubber_validation = scrubber.AndScrubber()
+        self.and_scrubber_prediction = scrubber.AndScrubber()
         self.descriptor = Descriptor('scrubbers', None)
         if scrubbers is not None:
             for new_scrubber in scrubbers:
@@ -492,6 +580,9 @@ class ScrubAdapter(Builder):
         if scrubber_target is None or scrubber_target is self.EVALUATION_DATA:
             self.and_scrubber_validation.add_scrubber(scrubber)
 
+        if scrubber_target is None or scrubber_target is self.PREDICTION_DATA:
+            self.and_scrubber_prediction.add_scrubber(scrubber)
+
         description_postfix = ''
         if scrubber_target is not None:
             description_postfix = ' (' + scrubber_target + ')'
@@ -508,6 +599,7 @@ class ScrubAdapter(Builder):
     def build(self, neural_net: AbstractAI):
         training_data = neural_net.training_data
         validation_data = neural_net.evaluation_data
+        prediction_data = neural_net.get_prediction_data()
 
         if training_data is not None:
             self.and_scrubber_training.validate_metadata(deepcopy(training_data.metadata))
@@ -516,6 +608,10 @@ class ScrubAdapter(Builder):
         if validation_data is not None:
             self.and_scrubber_validation.validate_metadata(deepcopy(validation_data.metadata))
             self.and_scrubber_validation.scrub(validation_data)
+
+        if prediction_data is not None:
+            self.and_scrubber_prediction.validate_metadata(deepcopy(prediction_data.metadata))
+            self.and_scrubber_prediction.scrub(prediction_data)
 
 
 class MetadataBuilder(Builder):
@@ -538,12 +634,16 @@ class MetadataBuilder(Builder):
     def build(self, neural_net: AbstractAI):
         training_data_model: Optional[DataModel] = neural_net.get_training_data()
         evaluation_data_model: Optional[DataModel] = neural_net.get_evaluation_data()
+        prediction_data_model: Optional[DataModel] = neural_net.get_prediction_data()
 
         if None is not training_data_model:
             neural_net.set_training_data(self.build_meta_data(training_data_model))
 
         if None is not evaluation_data_model:
             neural_net.set_evaluation_data(self.build_meta_data(evaluation_data_model))
+
+        if None is not prediction_data_model:
+            neural_net.set_prediction_data(self.build_meta_data(prediction_data_model))
 
     def build_meta_data(self, data_model):
         df = data_model.get_dataframe()
@@ -590,7 +690,6 @@ class FeatureColumnBuilder(Builder):
                 assert name in feature_config, 'Missing configuration for bucketized column: {}.'.format(name)
                 assert 'buckets' in self.feature_config()[name], \
                     'Missing buckets configuration for bucketized column: {}.'.format(name)
-
             self.add_feature_column(name=name, column_type=type)
 
     @property
@@ -612,6 +711,7 @@ class FeatureColumnBuilder(Builder):
     def build(self, ai: AbstractAI):
         training_data: Optional[DataModel] = ai.get_training_data()
         evaluation_data: Optional[DataModel] = ai.get_evaluation_data()
+        prediction_data: Optional[DataModel] = ai.get_prediction_data()
 
         if training_data is not None:
             self.build_feature_columns(training_data)
@@ -620,6 +720,10 @@ class FeatureColumnBuilder(Builder):
         if evaluation_data is not None:
             self.build_feature_columns(evaluation_data)
             ai.set_evaluation_data(evaluation_data)
+
+        if prediction_data is not None:
+            self.build_feature_columns(prediction_data)
+            ai.set_evaluation_data(prediction_data)
 
     def build_feature_columns(self, data_model):
         self.validate_target_not_in_features(data_model)
@@ -636,7 +740,6 @@ class FeatureColumnBuilder(Builder):
 
             if column_data['type'] is FeatureColumnStrategy.CROSSED_COLUMN:
                 continue
-
             data_model.add_feature_column(column_data['name'])
 
     @staticmethod

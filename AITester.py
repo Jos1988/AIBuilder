@@ -229,3 +229,98 @@ class AITester(AbstractAITester):
         hash_result = hashlib.md5(description)
 
         return hash_result.hexdigest()
+
+
+class Predictor:
+
+    def __init__(self, categories: List[str]):
+        self.categories = categories
+
+    def predict(self, models: List[AI.AI]) -> List:
+        predictions = self.load_predictions(models)
+
+        final_predictions = []
+        for item_predictions in predictions:
+            grouped_probabilities = self.group_probabilities_by_class(item_predictions)
+            averaged_prediction = self.average_grouped_prediction(grouped_probabilities)
+            final_predictions.append(averaged_prediction)
+
+        final_predictions = self.load_predicted_categories(final_predictions)
+
+        return final_predictions
+
+    def load_predictions(self, models: List[AI.AI]) -> np.array:
+        """ Loads 2D array of predictions where the second dimension equals the number of models and the first
+            the number of predictions.
+
+        ex: [
+            [prediction1, prediction2, prediction3 ..., predictionN], #item1
+            [prediction1, prediction2, prediction3 ..., predictionN], #item2
+            ...
+            [prediction1, prediction2, prediction3 ..., predictionN], #itemN
+        ]
+        """
+        predictions = []
+        length = 0
+        for model in models:
+            gen = model.predict()
+            model_predictions = [item_prediction for item_prediction in gen]
+
+            if length is 0:
+                length = len(model_predictions)
+            else:
+                assert length == len(model_predictions), 'Expected {} predictions got {}'\
+                    .format(length, len(model_predictions))
+
+            predictions.append(model_predictions)
+
+        predictions = np.array(predictions)
+        prediction_formatted = [predictions[:, i] for i in range(0, length)]
+
+        return prediction_formatted
+
+    def prediction_to_category(self, predictions: List[float]):
+        highest_prediction = max(predictions)
+        i = 0
+        for prediction in predictions:
+            if prediction == highest_prediction:
+                return self.categories[i]
+            i += 1
+
+    def load_predicted_categories(self, final_predictions):
+        final_predictions = [self.prediction_to_category(predictions) for predictions in final_predictions]
+        return final_predictions
+
+    def average_grouped_prediction(self, grouped_probabilities: dict):
+        """ Averages prediction per class.
+
+        :param grouped_probabilities: dict
+            ex: {'0': [0.1, 0.2, 0.3], '1': [0.9, 0.8, 0.7}
+
+        :return: returns returns Averaged dict:
+            ex: {'0': 0.2, '1': 0.8}
+        """
+
+        averaged_prediction = [sum(pred) / len(pred) for index, pred in grouped_probabilities.items()]
+        return averaged_prediction
+
+    def group_probabilities_by_class(self, item_predictions: dict):
+        """ Groups predictions from by class
+        item_predictions: List of dicts from tf.estimator.predict()
+
+        returns dict of predictions for each category
+                {'0': [0.1, 0.2, 0.1], '1': [0.9, 0.8, 0.9}
+        """
+        avg_predictions = {}
+        for prediction in item_predictions:
+            assert 'probabilities' in prediction
+            probabilities = prediction['probabilities']
+
+            i = 0
+            for probability in probabilities:
+                if i not in avg_predictions:
+                    avg_predictions[i] = []
+
+                avg_predictions[i].append(probability)
+                i += 1
+        return avg_predictions

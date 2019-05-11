@@ -20,7 +20,7 @@ class AbstractAI(ABC):
         pass
 
     @abstractmethod
-    def estimate(self):
+    def predict(self):
         pass
 
     @abstractmethod
@@ -72,6 +72,18 @@ class AbstractAI(ABC):
         pass
 
     @abstractmethod
+    def set_prediction_data(self, prediction_data: DataModel):
+        pass
+
+    @abstractmethod
+    def get_prediction_data(self):
+        pass
+
+    @abstractmethod
+    def set_prediction_fn(self, input_fn: Callable):
+        pass
+
+    @abstractmethod
     def set_optimizer(self, optimizer: tf.train.Optimizer):
         pass
 
@@ -85,6 +97,8 @@ class AI(AbstractAI):
     training_fn: Callable
     evaluation_data: DataModel
     evaluation_fn: Callable
+    prediction_data: DataModel
+    prediction_fn: Callable
     estimator: tf.estimator
     optimizer: tf.train.Optimizer
     results: dict
@@ -96,6 +110,7 @@ class AI(AbstractAI):
         self.name = name
         self.training_data = None
         self.evaluation_data = None
+        self.prediction_data = None
 
     def train(self):
         assert callable(self.training_fn), 'Training input Callable not set on AI: {}'\
@@ -109,8 +124,8 @@ class AI(AbstractAI):
 
         self.results = self.estimator.evaluate(input_fn=self.evaluation_fn)
 
-    def estimate(self):
-        pass
+    def predict(self):
+        return self.estimator.predict(input_fn=self.prediction_fn)
 
     def set_name(self, name: str):
         self.name = name
@@ -147,6 +162,15 @@ class AI(AbstractAI):
 
     def set_evaluation_fn(self, input_fn: Callable):
         self.evaluation_fn = input_fn
+
+    def set_prediction_data(self, prediction_data: DataModel):
+        self.prediction_data = prediction_data
+
+    def get_prediction_data(self):
+        return self.prediction_data
+
+    def set_prediction_fn(self, input_fn: Callable):
+        self.prediction_fn = input_fn
 
     def set_optimizer(self, optimizer: tf.train.Optimizer):
         self.optimizer = optimizer

@@ -11,7 +11,7 @@ import pandas as pd
 from AIBuilder.AIFactory.Builders import Builder
 import AIBuilder.DataScrubbing as scrubber
 from AIBuilder.AIFactory.Builders import DataBuilder, EstimatorBuilder, InputFunctionBuilder, NamingSchemeBuilder, \
-    OptimizerBuilder, ScrubAdapter, MetadataBuilder, DataSplitterBuilder, FeatureColumnBuilder
+    OptimizerBuilder, ScrubAdapter, MetadataBuilder, EvalDataSplitterBuilder, FeatureColumnBuilder
 
 
 class TestBuilder(Builder):
@@ -360,7 +360,7 @@ class TestMetadataBuilder(unittest.TestCase):
 class TestDataSplitterBuilder(unittest.TestCase):
 
     def test_build(self):
-        builder = DataSplitterBuilder(evaluation_data_perc=20, data_source=DataSplitterBuilder.TRAINING_DATA)
+        builder = EvalDataSplitterBuilder(evaluation_data_perc=20, data_source=EvalDataSplitterBuilder.TRAINING_DATA)
         arti = mock.Mock('AIBuilder.AbstractAI')
 
         # mock training model
