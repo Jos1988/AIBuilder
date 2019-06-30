@@ -716,7 +716,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
 
 class ConvertToColumnScrubber(Scrubber):
-    """Create a new column based and have it filled by callable.
+    """Create a new column and have it filled by callable.
     """
 
     def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict):
@@ -796,7 +796,6 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
     """
 
     # todo make this multi cat later.
-
     def __init__(self, new_column_name: str, source_column_name: str, keywords: List[str], unknown_category: str,
                  use_synonyms: Optional[bool] = False, min_syntactic_distance: Optional[float] = None,
                  verbose: Optional[int] = 0):
@@ -823,23 +822,22 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
         cat_alias = alias_loader.load_cat_aliases(keywords)
 
         def convert(row):
-            category = unknown_category
-            stop = False
-            for cat, aliases in cat_alias.items():
-                for alias in aliases:
-                    if stop is True:
-                        break
-
-                    row_value = row[source_column_name]
-                    if alias.lower() + ' ' in row_value.lower() + ' ':
-                        if self.verbosity > 1:
-                            print('value "{}", considered of cat "{}", through alias: "{}".'.format(row_value, cat,
-                                                                                                    alias))
-
-                        category = cat
-                        stop = True
+            category = find_category(row)
 
             return category
+
+        def find_category(row):
+            row_value = row[source_column_name]
+            for cat, aliases in cat_alias.items():
+                for alias in aliases:
+                    if alias.lower() + ' ' in row_value.lower() + ' ':
+                        if self.verbosity > 1:
+                            print('value "{}", considered of cat "{}", through alias: "{}".'
+                                  .format(row_value, cat, alias))
+
+                        return cat
+
+            return unknown_category
 
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.CATEGORICAL_DATA_TYPE,

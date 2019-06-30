@@ -175,7 +175,11 @@ class AITester(AbstractAITester):
         self.ml_model = ml_model
 
     def is_unique(self) -> bool:
-        report = self.get_report_file('r')
+        try:
+            report = self.get_report_file('r')
+        except FileNotFoundError:
+            return True
+
         for line in report:
             if -1 is not line.find(str(self.description_hash)):
                 report.close()

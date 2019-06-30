@@ -30,7 +30,8 @@ class Kernel:
         if 'no_log' in kwargs:
             self.no_log = kwargs['no_log']
 
-    def boot(self, evaluate: bool = True, predict = False):
+    def boot(self, train: bool = True, evaluate: bool = True, predict: bool = False):
+        self.train = train
         self.evaluate = evaluate
         self.predict = predict
 
@@ -38,8 +39,10 @@ class Kernel:
         self.dispatcher.addObserver(PreRunObserver())
         self.dispatcher.addObserver(ModelNotUniqueObserver())
         self.dispatcher.addObserver(PreCreateObserver())
-        self.dispatcher.addObserver(PreTrainObserver())
-        self.dispatcher.addObserver(PostTrainObserver())
+
+        if self.train:
+            self.dispatcher.addObserver(PreTrainObserver())
+            self.dispatcher.addObserver(PostTrainObserver())
 
         if self.evaluate:
             self.dispatcher.addObserver(PreEvaluationObserver())
@@ -80,7 +83,9 @@ class Kernel:
                 self.ModelNotUnique()
                 continue
 
-            self.doTrainModel()
+            if self.train:
+                self.doTrainModel()
+
             self.all_models.append(self.model)
             if self.evaluate:
                 self.doEvaluateModel()
