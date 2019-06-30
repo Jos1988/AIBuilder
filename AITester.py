@@ -218,7 +218,8 @@ class AITester(AbstractAITester):
         assert type(self.test_time) is str, 'Test time not set in AITester.'
 
     def get_report_file(self, mode: str):
-        path = self.ml_model.get_log_dir() + '/' + self.ml_model.get_project_name() + '/ai_reports.txt'
+        path = self.ml_model.get_log_dir() + '/ai_reports.txt'
+
         report = open(path, mode=mode)
         return report
 

@@ -327,10 +327,6 @@ class EstimatorBuilder(Builder):
 
         return
 
-    @staticmethod
-    def render_model_dir(ai) -> str:
-        return ai.get_log_dir() + '/' + ai.get_project_name() + '/tensor_board/' + ai.name()
-
 
 class InputFunctionBuilder(Builder):
     BASE_FN = 'base_fn'
@@ -484,7 +480,7 @@ class NamingSchemeBuilder(Builder):
         self.AI.set_name(name)
 
     def get_logged_names(self):
-        tensor_board_path = self.AI.get_log_dir() + '/' + self.AI.get_project_name() + '/tensor_board'
+        tensor_board_path = self.AI.get_log_dir() + '/tensor_board'
         return next(os.walk(tensor_board_path))[1]
 
     def get_version(self, name: str):

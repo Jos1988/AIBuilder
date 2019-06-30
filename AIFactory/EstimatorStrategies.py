@@ -25,8 +25,7 @@ class EstimatorStrategy(ABC):
         return self.result
 
     def get_model_dir(self) -> str:
-        return self.ML_Model.get_log_dir() + '/' + self.ML_Model.get_project_name() + '/tensor_board/' + \
-               self.ML_Model.get_name()
+        return self.ML_Model.get_tensor_board_dir()
 
     @abstractmethod
     def build_estimator(self) -> tf.feature_column:

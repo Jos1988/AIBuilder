@@ -138,6 +138,9 @@ class AI(AbstractAI):
 
     def get_log_dir(self) -> str:
         return self.log_dir
+    
+    def get_tensor_board_dir(self):
+        return self.log_dir + '/tensor_board/' + self.get_name()
 
     def set_project_name(self, project_name: str):
         self.project_name = project_name
