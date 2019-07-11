@@ -1,5 +1,9 @@
+import itertools
 from abc import ABC, abstractmethod
 from typing import List, Union, Optional
+
+from nltk import RegexpTokenizer
+from tqdm import tqdm
 
 from AIBuilder.AIFactory import BalanceData
 from AIBuilder.AIFactory.BalanceData import UnbalancedDataStrategy, UnbalancedDataStrategyFactory
@@ -410,25 +414,45 @@ class AndScrubber(Scrubber):
         return data_model
 
 
-class BlackListScrubber(Scrubber):
+class BlacklistCatScrubber(Scrubber):
     """ Removes rows with blacklisted categories.
+
+    Example:
+    df_1:   col_a   col_b
+        1   'ham'   3
+        2   'spam'  1
+        3   'egg'   4
+        4   'eggs'  1
+
+    scrubber_1 = BlacklistCatScrubber(column_name='col_a' blacklist=['egg', 'ham])
+
+    scrubbing df_1 with scrubber_1 will give the following df:
+    df_1:   col_a   col_b
+        2   'spam'  1
+        3   'eggs'  4
+
+    Please note that scrubbers scrub the df's inside DataModels, not df's directly,
+    this fact is omitted for the sake of simplicity.
+
+    Notes:
+         - The column referred to in the 'column_name' argument should contain strings.
+         - The column referred to in the 'column_name' argument should ben known to metadata as CATEGORICAL_DATA_TYPE.
     """
 
     @property
     def scrubber_config_list(self):
         return {}
 
-    def __init__(self, column_name: str, black_list: List[str]):
-        self.black_list = DataTypeSpecification('black_list', black_list, List[str])
+    def __init__(self, column_name: str, blacklist: List[str]):
+        self.blacklist = DataTypeSpecification('blacklist', blacklist, List[str])
         self.column_name = DataTypeSpecification('column_name', column_name, str)
 
     def validate(self, data_model: DataModel):
         df = data_model.get_dataframe()
 
+        assert self.column_name() in df.columns, 'column name {} not in de dataframe'.format(self.column_name())
         assert MetaData.CATEGORICAL_DATA_TYPE == data_model.metadata.get_column_type(
             self.column_name()), 'Column {} is not a categorical column.'.format(self.column_name())
-
-        assert self.column_name() in df.columns, 'column name {} not in de dataframe'.format(self.column_name())
 
     def update_metadata(self, meta_data: MetaData):
         pass
@@ -436,8 +460,76 @@ class BlackListScrubber(Scrubber):
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
         df = df.set_index(self.column_name())
-        df = df.drop(self.black_list(), axis=0)
+        df = df.drop(self.blacklist(), axis=0)
         df = df.reset_index()
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class BlacklistTokenScrubber(Scrubber):
+    """ Removes blacklisted words from list in column, does not remove rows.
+    TODO: unit test.
+
+    Example:
+    df_1:   col_a   col_b   col_c
+        1   'ham'   3       ['eggs', 'sausage', 'bacon']
+        2   'spam'  1       ['egg', 'bacon', 'spam']
+        3   'eggs'  4       ['egg', 'bacon', 'sausage', 'spam']
+
+    scrubber_1 = BlacklistTokenScrubber(column_name='col_c' blacklist=['egg', 'sausage'])
+
+    scrubbing df_1 with scrubber_1 will give the following df:
+    df_1:   col_a   col_b   col_c
+        1   'ham'   3       ['eggs', 'bacon']
+        2   'spam'  1       ['bacon', 'spam']
+        3   'eggs'  4       ['egg', 'bacon', 'spam']
+
+    Please note that scrubbers scrub the df's inside DataModels, not df's directly,
+    this fact is omitted for the sake of simplicity.
+
+    Notes:
+        - The column referred to in the 'column_name' argument should contain lists of strings.
+        - The column referred to in the 'column_name' argument should ben known to metadata as LIST_DATA_TYPE.
+    """
+
+    def __init__(self, column_name: str, blacklist: List[str], show_progress: bool = True):
+        """
+        Args:
+            column_name: Name of column to scrub.
+            blacklist:  List of strings to scrub from lists in columns.
+            show_progress: If True shows a progress bar.
+        """
+        self.blacklist = DataTypeSpecification('blacklist', blacklist, List[str])
+        self.column_name = DataTypeSpecification('column_name', column_name, str)
+        self.show_progress = DataTypeSpecification('show_progress', show_progress, bool)
+
+    @property
+    def scrubber_config_list(self):
+        return {}
+
+    def validate(self, data_model: DataModel):
+        df = data_model.get_dataframe()
+
+        assert self.column_name() in df.columns, 'column name {} not in de dataframe'.format(self.column_name())
+        assert MetaData.LIST_DATA_TYPE == data_model.metadata.get_column_type(
+            self.column_name()), 'Column {} is not a list column.'.format(self.column_name())
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+
+        def filter_list(word_list: list) -> list:
+            return list(filter(lambda word: word.lower() not in self.blacklist(), word_list))
+
+        if self.show_progress():
+            tqdm.pandas()
+            df[self.column_name()] = df[self.column_name()].progress_apply(filter_list)
+        else:
+            df[self.column_name()] = df[self.column_name()].apply(filter_list)
+
         data_model.set_dataframe(df)
 
         return data_model
@@ -716,10 +808,16 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
 
 class ConvertToColumnScrubber(Scrubber):
-    """Create a new column and have it filled by callable.
+    """Create a new column and have it filled for each row by a by callable.
     """
 
     def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict):
+        """
+        :param new_column_name:
+        :param new_column_type:
+        :param converter:
+        :param required_columns:
+        """
         self.new_column_type = new_column_type
         self.required_columns = required_columns
         self.converter = converter
@@ -765,6 +863,27 @@ class CategoryToFloatScrubber(ConvertToColumnScrubber):
                          required_columns={source_column_name: MetaData.CATEGORICAL_DATA_TYPE})
 
 
+class TokenizeScrubber(ConvertToColumnScrubber):
+    """Tokenize Text columns."""
+
+    def __init__(self, new_column_name: str, source_column_name: str, pattern: str = r'\w+'):
+        """
+        :param new_column_name: Column that will be filled with tokens.
+        :param source_column_name: Column with text values to tokenize.
+        :param pattern: Regex pattern used to tokenize.
+        """
+
+        tokenizer = RegexpTokenizer(pattern)
+
+        def convert(row):
+            return tokenizer.tokenize(row[source_column_name])
+
+        super().__init__(new_column_name=new_column_name,
+                         new_column_type=MetaData.LIST_DATA_TYPE,
+                         converter=convert,
+                         required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
+
+
 class ColumnBinner(Scrubber):
 
     def __init__(self, source_column_name: str, target_column_name: str, bins: list, labels: list):
@@ -796,17 +915,23 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
     """
 
     # todo make this multi cat later.
-    def __init__(self, new_column_name: str, source_column_name: str, keywords: List[str], unknown_category: str,
-                 use_synonyms: Optional[bool] = False, min_syntactic_distance: Optional[float] = None,
-                 verbose: Optional[int] = 0):
+    # todo unit test.
+    # todo do not return first result but implement voting?
+    # todo move conversion logic to object, can place in syntactic tools.
+    def __init__(self, new_column_name: str, source_column_name: str, keywords_cats: dict, unknown_category: str,
+                 use_synonyms: Optional[bool] = False, multiple_cats: Optional[bool] = False,
+                 min_syntactic_distance: Optional[float] = None, verbose: Optional[int] = 0):
         """
         :param new_column_name:
-        :param source_column_name:
-        :param keywords: list of keywords as values.
-        :param unknown_category:
+        :param source_column_name: wil contain selected category (string). if multi_cat is True, it wil contain a
+                list of categories.
+        :param keywords_cats: dict than describes which keywords indicate which categories:
+                structure: dict {cat1: (keys1, ...key_n). cat2: (keys1, ...key_n), ... cat_n: (keys1, ...key_n)}
+        :param unknown_category: used if no keywords are found
         :param use_synonyms: if True synonyms to the keywords will be used to determine category
+        :param multiple_cats: set to True to allow multiple categories to be assigned
         :param min_syntactic_distance: minimum similarity between keyword and its synonym for the synonym to be used.
-        :param verbose: bool, 0: not verbose, 1: verbose, 2: verbose
+        :param verbose: bool, 0: not verbose, 1: verbose, 2: very verbose
         """
         self.verbosity = verbose
         self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', 0.0, float)
@@ -819,25 +944,43 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
                                    min_syntactic_distance=self.min_syntactic_distance(),
                                    verbosity=self.verbosity)
 
-        cat_alias = alias_loader.load_cat_aliases(keywords)
+        cat_alias = alias_loader.load_cat_aliases(list(itertools.chain.from_iterable(keywords_cats.values())))
 
         def convert(row):
-            category = find_category(row)
+            row_value: str = row[source_column_name]
+            key_found = find_key(row_value)
 
-            return category
+            if key_found is None:
+                return unknown_category
 
-        def find_category(row):
-            row_value = row[source_column_name]
-            for cat, aliases in cat_alias.items():
+            for category, key_list in keywords_cats.items():
+                for key in key_list:
+                    if key == key_found:
+                        display_decision(key_found, category)
+                        return category
+
+            raise RuntimeError(f'"find_key" method found a non-existing key: "{key_found}".')
+
+        def find_key(row_value: str):
+            for key, aliases in cat_alias.items():
                 for alias in aliases:
                     if alias.lower() + ' ' in row_value.lower() + ' ':
-                        if self.verbosity > 1:
-                            print('value "{}", considered of cat "{}", through alias: "{}".'
-                                  .format(row_value, cat, alias))
+                        display_association(alias, key)
+                        return key
 
-                        return cat
+            return None
 
-            return unknown_category
+        def display_decision(key_found: str, category: str) -> None:
+            if self.verbosity < 1:
+                return
+
+            print("Determined category {} based on key word: {}".format(category, key_found))
+
+        def display_association(alias: str, key: str) -> None:
+            if self.verbosity < 2:
+                return
+
+            print("Interpreting {} as an alias of {}.".format(alias, key))
 
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.CATEGORICAL_DATA_TYPE,

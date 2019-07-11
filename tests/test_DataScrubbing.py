@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
-    MultipleCatListToMultipleHotScrubber, BlackListScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
+    MultipleCatListToMultipleHotScrubber, BlacklistCatScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
     KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy
 
 
@@ -316,21 +316,21 @@ class TestBlackListScrubber(unittest.TestCase):
         self.data_model.metadata = metadata
 
     def testValidateInvalid(self):
-        scrubber = BlackListScrubber(column_name='invalid', black_list=['bird'])
+        scrubber = BlacklistCatScrubber(column_name='invalid', blacklist=['bird'])
         with self.assertRaises(AssertionError):
             scrubber.validate(self.data_model)
 
     def testValidateInvalid2(self):
-        scrubber = BlackListScrubber(column_name='column', black_list=['bird'])
+        scrubber = BlacklistCatScrubber(column_name='column', blacklist=['bird'])
         with self.assertRaises(AssertionError):
             scrubber.validate(self.data_model)
 
     def testValidateValid(self):
-        scrubber = BlackListScrubber(column_name='categorical', black_list=['cat', 'bird'])
+        scrubber = BlacklistCatScrubber(column_name='categorical', blacklist=['cat', 'bird'])
         scrubber.validate(self.data_model)
 
     def testScrub(self):
-        scrubber = BlackListScrubber(column_name='categorical', black_list=['bird'])
+        scrubber = BlacklistCatScrubber(column_name='categorical', blacklist=['bird'])
         result = scrubber.scrub(self.data_model)
         df = result.get_dataframe()
         categories = df['categorical'].values.tolist()
@@ -338,7 +338,7 @@ class TestBlackListScrubber(unittest.TestCase):
         self.assertNotIn('bird', categories)
 
     def testScrub2(self):
-        scrubber = BlackListScrubber(column_name='categorical', black_list=['dog', 'bird'])
+        scrubber = BlacklistCatScrubber(column_name='categorical', blacklist=['dog', 'bird'])
         result = scrubber.scrub(self.data_model)
         df = result.get_dataframe()
         categories = df['categorical'].values.tolist()
@@ -605,7 +605,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
     def testScrubbing(self):
         scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
                                              source_column_name='text_1',
-                                             keywords=['one', 'two', 'three'],
+                                             keywords_cats=['one', 'two', 'three'],
                                              unknown_category='unknown',
                                              verbose=0)
 
@@ -619,7 +619,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
     def testScrubbingWithAliases(self):
         scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
                                              source_column_name='text_1',
-                                             keywords=['one', 'two', 'three', 'foo bar'],
+                                             keywords_cats=['one', 'two', 'three', 'foo bar'],
                                              unknown_category='unknown',
                                              use_synonyms=True,
                                              min_syntactic_distance=0.01,
