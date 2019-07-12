@@ -8,7 +8,7 @@ from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlacklistCatScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
-    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy, \
+    CategoryByKeywordsFinder, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy, \
     BlacklistTokenScrubber
 
 
@@ -353,7 +353,7 @@ class TestBlacklistTokenScrubber(unittest.TestCase):
     def setUp(self):
         data = {
             'target_column': [
-                ['Job', 'in', 'Dixon'],
+                ['Job', 'in', 'Dixon', 'with', 'successful', 'business'],
                 ['Engineer', 'Quality', 'in', 'Dixon'],
                 ['Shift', 'Supervisor', 'Part', 'time', 'job', 'in', 'Camphill'],
                 ['Construction', 'PM', 'Job', 'in', 'Dixon'],
@@ -389,6 +389,17 @@ class TestBlacklistTokenScrubber(unittest.TestCase):
         df = result.get_dataframe()
         lists = df['target_column'].values.tolist()
         self.assertEqual(5, len(df))
+        for row in lists:
+            for item in self.blacklist:
+                self.assertNotIn(item, row)
+
+    def testScrubWithSynonyms(self):
+        scrubber = BlacklistTokenScrubber(column_name='target_column', blacklist=self.blacklist, use_synonyms=True)
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        lists = df['target_column'].values.tolist()
+        self.assertEqual(5, len(df))
+        self.blacklist.append('business')
         for row in lists:
             for item in self.blacklist:
                 self.assertNotIn(item, row)
@@ -650,11 +661,11 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
         self.data_model.metadata = metadata
 
     def testScrubbing(self):
-        scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
-                                             source_column_name='text_1',
-                                             keywords_cats=['one', 'two', 'three'],
-                                             unknown_category='unknown',
-                                             verbose=0)
+        scrubber = CategoryByKeywordsFinder(new_column_name='cat_1',
+                                            source_column_name='text_1',
+                                            category_keywords_map={'one': ['one'], 'two': ['two'], 'three': ['three']},
+                                            unknown_category='unknown',
+                                            verbose=0)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
@@ -663,20 +674,43 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
         self.assertEqual(result_df['cat_1'].values.tolist(),
                          ['one', 'unknown', 'two', 'three', 'one', 'unknown', 'unknown', 'unknown'])
 
-    def testScrubbingWithAliases(self):
-        scrubber = KeyWordToCategoryScrubber(new_column_name='cat_1',
-                                             source_column_name='text_1',
-                                             keywords_cats=['one', 'two', 'three', 'foo bar'],
-                                             unknown_category='unknown',
-                                             use_synonyms=True,
-                                             min_syntactic_distance=0.01,
-                                             verbose=True)
+    def testScrubbingWithVoting(self):
+        scrubber = CategoryByKeywordsFinder(new_column_name='cat_1', source_column_name='text_1',
+                                            category_keywords_map={'a': ['we', 'i'], 'b': ['two', 'three', 'one', 'foo', 'bar']},
+                                            unknown_category='unknown', verbose=0)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
         result_df = result.get_dataframe()
 
-        print(result_df['cat_1'].values.tolist())
+        self.assertEqual(['a', 'a', 'a', 'b', 'b', 'a', 'unknown', 'b'],
+                         result_df['cat_1'].values.tolist())
+
+    def testScrubbingWithMultipleCat(self):
+        scrubber = CategoryByKeywordsFinder(new_column_name='cat_1', source_column_name='text_1',
+                                            category_keywords_map={'a': ['we', 'i'], 'b': ['two', 'three', 'one', 'foo', 'bar']},
+                                            unknown_category='unknown', verbose=0, multiple_cats=True)
+
+        scrubber.validate(self.data_model)
+        result = scrubber.scrub(self.data_model)
+        result_df = result.get_dataframe()
+
+        self.assertEqual([{'a', 'b'}, {'a'}, {'a', 'b'}, {'b'}, {'b'}, {'a'}, {'unknown'}, {'a', 'b'}],
+                         result_df['cat_1'].values.tolist())
+
+    def testScrubbingWithAliases(self):
+        scrubber = CategoryByKeywordsFinder(new_column_name='cat_1',
+                                            source_column_name='text_1',
+                                            category_keywords_map={'one': ['one'], 'two': ['two'], 'three': ['three'], 'foo bar': ['foo bar']},
+                                            unknown_category='unknown',
+                                            use_synonyms=True,
+                                            min_syntactic_distance=0.01,
+                                            verbose=0)
+
+        scrubber.validate(self.data_model)
+        result = scrubber.scrub(self.data_model)
+        result_df = result.get_dataframe()
+
         self.assertEqual(result_df['cat_1'].values.tolist(),
                          ['one', 'one', 'two', 'three', 'one', 'unknown', 'one', 'foo bar'])
 

@@ -1,5 +1,6 @@
 import itertools
 from abc import ABC, abstractmethod
+from collections import Counter
 from typing import List, Union, Optional
 
 from nltk import RegexpTokenizer
@@ -19,7 +20,7 @@ from scipy import stats
 import pandas as pd
 
 from AIBuilder.Summizer import TimeSummizer
-from AIBuilder.SyntacticTools import AliasLoader
+from AIBuilder.LinguisticTools import SynonymLoader, StringCategorizer
 
 
 class Scrubber(ABC, Describer):
@@ -469,7 +470,6 @@ class BlacklistCatScrubber(Scrubber):
 
 class BlacklistTokenScrubber(Scrubber):
     """ Removes blacklisted words from list in column, does not remove rows.
-    TODO: unit test.
 
     Example:
     df_1:   col_a   col_b   col_c
@@ -493,7 +493,8 @@ class BlacklistTokenScrubber(Scrubber):
         - The column referred to in the 'column_name' argument should ben known to metadata as LIST_DATA_TYPE.
     """
 
-    def __init__(self, column_name: str, blacklist: List[str], show_progress: bool = True):
+    def __init__(self, column_name: str, blacklist: List[str], show_progress: bool = True,
+        use_synonyms: Optional[bool] = False,  min_syntactic_distance: Optional[float] = 0.5):
         """
         Args:
             column_name: Name of column to scrub.
@@ -504,6 +505,15 @@ class BlacklistTokenScrubber(Scrubber):
         self.blacklist = DataTypeSpecification('blacklist', blacklist, List[str])
         self.column_name = DataTypeSpecification('column_name', column_name, str)
         self.show_progress = DataTypeSpecification('show_progress', show_progress, bool)
+        self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
+        self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', min_syntactic_distance, float)
+        self.used_blacklist = self.blacklist()
+
+        if self.use_synonyms():
+            alias_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance())
+            aliases = alias_loader.load_synonyms_by_words(self.blacklist())
+            self.used_blacklist = list(itertools.chain.from_iterable(aliases.values()))
+
 
     @property
     def scrubber_config_list(self):
@@ -523,7 +533,7 @@ class BlacklistTokenScrubber(Scrubber):
         df = data_model.get_dataframe()
 
         def filter_list(word_list: list) -> list:
-            return list(filter(lambda word: word.lower() not in self.blacklist(), word_list))
+            return list(filter(lambda word: word.lower() not in self.used_blacklist, word_list))
 
         if self.show_progress():
             tqdm.pandas()
@@ -911,22 +921,18 @@ class ColumnBinner(Scrubber):
         return data_model
 
 
-class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
+class CategoryByKeywordsFinder(ConvertToColumnScrubber):
     """ Search for keyword in text to determine category.
     """
 
-    # todo make this multi cat later.
-    # todo unit test.
-    # todo do not return first result but implement voting?
-    # todo move conversion logic to object, can place in syntactic tools.
-    def __init__(self, new_column_name: str, source_column_name: str, keywords_cats: dict, unknown_category: str,
-                 use_synonyms: Optional[bool] = False, multiple_cats: Optional[bool] = False,
-                 min_syntactic_distance: Optional[float] = None, verbose: Optional[int] = 0):
+    def __init__(self, new_column_name: str, source_column_name: str, category_keywords_map: dict,
+                 unknown_category: str, use_synonyms: Optional[bool] = False, multiple_cats: Optional[bool] = False,
+                 min_syntactic_distance: Optional[float] = 0.5, verbose: Optional[int] = 0):
         """
         :param new_column_name:
         :param source_column_name: wil contain selected category (string). if multi_cat is True, it wil contain a
                 list of categories.
-        :param keywords_cats: dict than describes which keywords indicate which categories:
+        :param category_keywords_map: dict than describes which keywords indicate which categories:
                 structure: dict {cat1: (keys1, ...key_n). cat2: (keys1, ...key_n), ... cat_n: (keys1, ...key_n)}
         :param unknown_category: used if no keywords are found
         :param use_synonyms: if True synonyms to the keywords will be used to determine category
@@ -935,53 +941,22 @@ class KeyWordToCategoryScrubber(ConvertToColumnScrubber):
         :param verbose: bool, 0: not verbose, 1: verbose, 2: very verbose
         """
         self.verbosity = verbose
-        self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', 0.0, float)
-        if min_syntactic_distance is not None:
-            self.min_syntactic_distance.value = min_syntactic_distance
-
+        self.multiple_cats = DataTypeSpecification('multiple cats', multiple_cats, bool)
         self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
+        self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', min_syntactic_distance, float)
 
-        alias_loader = AliasLoader(use_synonyms=self.use_synonyms(),
-                                   min_syntactic_distance=self.min_syntactic_distance(),
-                                   verbosity=self.verbosity)
+        if self.use_synonyms():
+            alias_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance(),
+                                         verbosity=self.verbosity)
+            category_keywords_map = alias_loader.load_synonyms_by_words(list(category_keywords_map.keys()))
 
-        cat_alias = alias_loader.load_cat_aliases(list(itertools.chain.from_iterable(keywords_cats.values())))
+        self.stringCategorizer = StringCategorizer(category_keywords_map, unknown_category=unknown_category,
+                                                   multiple=self.multiple_cats(), verbosity=self.verbosity)
 
-        def convert(row):
-            row_value: str = row[source_column_name]
-            key_found = find_key(row_value)
-
-            if key_found is None:
-                return unknown_category
-
-            for category, key_list in keywords_cats.items():
-                for key in key_list:
-                    if key == key_found:
-                        display_decision(key_found, category)
-                        return category
-
-            raise RuntimeError(f'"find_key" method found a non-existing key: "{key_found}".')
-
-        def find_key(row_value: str):
-            for key, aliases in cat_alias.items():
-                for alias in aliases:
-                    if alias.lower() + ' ' in row_value.lower() + ' ':
-                        display_association(alias, key)
-                        return key
-
-            return None
-
-        def display_decision(key_found: str, category: str) -> None:
-            if self.verbosity < 1:
-                return
-
-            print("Determined category {} based on key word: {}".format(category, key_found))
-
-        def display_association(alias: str, key: str) -> None:
-            if self.verbosity < 2:
-                return
-
-            print("Interpreting {} as an alias of {}.".format(alias, key))
+        def convert(row) -> Union[str, set]:
+            row_value = row[source_column_name]
+            cat_found = self.stringCategorizer.categorize(row_value)
+            return cat_found
 
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.CATEGORICAL_DATA_TYPE,
