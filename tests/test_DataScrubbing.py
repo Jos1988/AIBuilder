@@ -8,7 +8,8 @@ from datetime import datetime
 from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, AverageColumnScrubber, \
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlacklistCatScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
-    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy
+    KeyWordToCategoryScrubber, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy, \
+    BlacklistTokenScrubber
 
 
 class TestConvertToNumericScrubber(unittest.TestCase):
@@ -301,7 +302,7 @@ class TestAndScrubber(unittest.TestCase):
         self.assertEqual(105, round(result[2]))
 
 
-class TestBlackListScrubber(unittest.TestCase):
+class TestBlacklistCatScrubber(unittest.TestCase):
 
     def setUp(self):
         data = {
@@ -345,6 +346,52 @@ class TestBlackListScrubber(unittest.TestCase):
         self.assertEqual(6, len(df))
         self.assertNotIn('bird', categories)
         self.assertNotIn('dog', categories)
+
+
+class TestBlacklistTokenScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {
+            'target_column': [
+                ['Job', 'in', 'Dixon'],
+                ['Engineer', 'Quality', 'in', 'Dixon'],
+                ['Shift', 'Supervisor', 'Part', 'time', 'job', 'in', 'Camphill'],
+                ['Construction', 'PM', 'Job', 'in', 'Dixon'],
+                ['CyberCoders', 'Application', 'Principal', 'QA', 'Engineer', 'Java'],
+            ],
+            'column': [12, 45, 23, 78, 4],
+        }
+
+        metadata = MetaData()
+        metadata.define_list_columns(['target_column'])
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+        self.blacklist = ['job', 'in', 'Dixon']
+
+    def testValidateInvalid(self):
+        scrubber = BlacklistTokenScrubber(column_name='invalid', blacklist=self.blacklist)
+        with self.assertRaises(AssertionError):
+            scrubber.validate(self.data_model)
+
+    def testValidateInvalid2(self):
+        scrubber = BlacklistTokenScrubber(column_name='column', blacklist=self.blacklist)
+        with self.assertRaises(AssertionError):
+            scrubber.validate(self.data_model)
+
+    def testValidateValid(self):
+        scrubber = BlacklistTokenScrubber(column_name='target_column', blacklist=self.blacklist)
+        scrubber.validate(self.data_model)
+
+    def testScrub(self):
+        scrubber = BlacklistTokenScrubber(column_name='target_column', blacklist=self.blacklist)
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        lists = df['target_column'].values.tolist()
+        self.assertEqual(5, len(df))
+        for row in lists:
+            for item in self.blacklist:
+                self.assertNotIn(item, row)
 
 
 class TestOutlierScrubbing(unittest.TestCase):

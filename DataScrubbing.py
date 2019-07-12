@@ -500,6 +500,7 @@ class BlacklistTokenScrubber(Scrubber):
             blacklist:  List of strings to scrub from lists in columns.
             show_progress: If True shows a progress bar.
         """
+        blacklist = list(map(lambda w: w.lower(), blacklist))
         self.blacklist = DataTypeSpecification('blacklist', blacklist, List[str])
         self.column_name = DataTypeSpecification('column_name', column_name, str)
         self.show_progress = DataTypeSpecification('show_progress', show_progress, bool)
