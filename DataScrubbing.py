@@ -411,8 +411,14 @@ class AndScrubber(Scrubber):
             scrubber.update_metadata(meta_data=data_model.metadata)
             self.console_printer.line('  - Scrubbing: ' + scrubber.__class__.__name__)
             scrubber.scrub(data_model)
+            if len(data_model.get_dataframe()) == 0:
+                raise DataException('All rows have been scrubbed from DataFrame.')
 
         return data_model
+
+
+class DataException(Exception):
+    pass
 
 
 class BlacklistCatScrubber(Scrubber):
@@ -493,18 +499,18 @@ class BlacklistTokenScrubber(Scrubber):
         - The column referred to in the 'column_name' argument should ben known to metadata as LIST_DATA_TYPE.
     """
 
-    def __init__(self, column_name: str, blacklist: List[str], show_progress: bool = True,
-        use_synonyms: Optional[bool] = False,  min_syntactic_distance: Optional[float] = 0.5):
+    def __init__(self, column_name: str, blacklist: List[str], verbosity: int = 0, use_synonyms: Optional[bool] = False,
+                 min_syntactic_distance: Optional[float] = 0.5):
         """
         Args:
             column_name: Name of column to scrub.
             blacklist:  List of strings to scrub from lists in columns.
-            show_progress: If True shows a progress bar.
+            verbosity: larger than 0, displays progress bar.
         """
         blacklist = list(map(lambda w: w.lower(), blacklist))
         self.blacklist = DataTypeSpecification('blacklist', blacklist, List[str])
         self.column_name = DataTypeSpecification('column_name', column_name, str)
-        self.show_progress = DataTypeSpecification('show_progress', show_progress, bool)
+        self.verbosity = verbosity
         self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
         self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', min_syntactic_distance, float)
         self.used_blacklist = self.blacklist()
@@ -513,7 +519,6 @@ class BlacklistTokenScrubber(Scrubber):
             alias_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance())
             aliases = alias_loader.load_synonyms_by_words(self.blacklist())
             self.used_blacklist = list(itertools.chain.from_iterable(aliases.values()))
-
 
     @property
     def scrubber_config_list(self):
@@ -535,7 +540,7 @@ class BlacklistTokenScrubber(Scrubber):
         def filter_list(word_list: list) -> list:
             return list(filter(lambda word: word.lower() not in self.used_blacklist, word_list))
 
-        if self.show_progress():
+        if self.verbosity > 0:
             tqdm.pandas()
             df[self.column_name()] = df[self.column_name()].progress_apply(filter_list)
         else:
@@ -822,17 +827,22 @@ class ConvertToColumnScrubber(Scrubber):
     """Create a new column and have it filled for each row by a by callable.
     """
 
-    def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict):
+    def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict,
+                 **kwargs):
         """
         :param new_column_name:
         :param new_column_type:
         :param converter:
         :param required_columns:
+        :param verbosity: shows progressbar if > 1
         """
         self.new_column_type = new_column_type
         self.required_columns = required_columns
         self.converter = converter
         self.new_column_name = new_column_name
+        self.verbosity = 0
+        if 'verbosity' in kwargs:
+            self.verbosity = kwargs['verbosity']
 
     @property
     def scrubber_config_list(self):
@@ -854,7 +864,13 @@ class ConvertToColumnScrubber(Scrubber):
 
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
-        df[self.new_column_name] = df.apply(self.converter, axis=1)
+
+        if self.verbosity > 0:
+            tqdm.pandas()
+            df[self.new_column_name] = df.progress_apply(self.converter, axis=1)
+        else:
+            df[self.new_column_name] = df.apply(self.converter, axis=1)
+
         data_model.set_dataframe(df)
 
         return data_model
@@ -863,7 +879,7 @@ class ConvertToColumnScrubber(Scrubber):
 class CategoryToFloatScrubber(ConvertToColumnScrubber):
     """Add a column with a float value based on categorical column"""
 
-    def __init__(self, new_column_name: str, source_column_name: str, category_to_value_index: dict):
+    def __init__(self, new_column_name: str, source_column_name: str, category_to_value_index: dict, **kwargs):
         def convert(row):
             cat = row[source_column_name]
             return category_to_value_index[cat]
@@ -871,13 +887,14 @@ class CategoryToFloatScrubber(ConvertToColumnScrubber):
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.NUMERICAL_DATA_TYPE,
                          converter=convert,
-                         required_columns={source_column_name: MetaData.CATEGORICAL_DATA_TYPE})
+                         required_columns={source_column_name: MetaData.CATEGORICAL_DATA_TYPE},
+                         **kwargs)
 
 
 class TokenizeScrubber(ConvertToColumnScrubber):
     """Tokenize Text columns."""
 
-    def __init__(self, new_column_name: str, source_column_name: str, pattern: str = r'\w+'):
+    def __init__(self, new_column_name: str, source_column_name: str, pattern: str = r'\w+', **kwargs):
         """
         :param new_column_name: Column that will be filled with tokens.
         :param source_column_name: Column with text values to tokenize.
@@ -892,7 +909,8 @@ class TokenizeScrubber(ConvertToColumnScrubber):
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.LIST_DATA_TYPE,
                          converter=convert,
-                         required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
+                         required_columns={source_column_name: MetaData.TEXT_DATA_TYPE},
+                         **kwargs)
 
 
 class ColumnBinner(Scrubber):
@@ -927,7 +945,7 @@ class CategoryByKeywordsFinder(ConvertToColumnScrubber):
 
     def __init__(self, new_column_name: str, source_column_name: str, category_keywords_map: dict,
                  unknown_category: str, use_synonyms: Optional[bool] = False, multiple_cats: Optional[bool] = False,
-                 min_syntactic_distance: Optional[float] = 0.5, verbose: Optional[int] = 0):
+                 min_syntactic_distance: Optional[float] = 0.5, verbosity: Optional[int] = 0, **kwargs):
         """
         :param new_column_name:
         :param source_column_name: wil contain selected category (string). if multi_cat is True, it wil contain a
@@ -938,17 +956,20 @@ class CategoryByKeywordsFinder(ConvertToColumnScrubber):
         :param use_synonyms: if True synonyms to the keywords will be used to determine category
         :param multiple_cats: set to True to allow multiple categories to be assigned
         :param min_syntactic_distance: minimum similarity between keyword and its synonym for the synonym to be used.
-        :param verbose: bool, 0: not verbose, 1: verbose, 2: very verbose
+        :param verbosity: bool, 0: not verbose, 1: verbose, 2: very verbose
         """
-        self.verbosity = verbose
+        self.verbosity = verbosity
         self.multiple_cats = DataTypeSpecification('multiple cats', multiple_cats, bool)
         self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
         self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', min_syntactic_distance, float)
 
         if self.use_synonyms():
-            alias_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance(),
-                                         verbosity=self.verbosity)
-            category_keywords_map = alias_loader.load_synonyms_by_words(list(category_keywords_map.keys()))
+            synonym_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance(),
+                                           verbosity=self.verbosity)
+            for category, keys in category_keywords_map.items():
+                synonyms = synonym_loader.load_synonyms_by_words(keys)
+                synonyms = list(itertools.chain.from_iterable(synonyms.values()))
+                category_keywords_map[category] = synonyms
 
         self.stringCategorizer = StringCategorizer(category_keywords_map, unknown_category=unknown_category,
                                                    multiple=self.multiple_cats(), verbosity=self.verbosity)
@@ -961,7 +982,8 @@ class CategoryByKeywordsFinder(ConvertToColumnScrubber):
         super().__init__(new_column_name=new_column_name,
                          new_column_type=MetaData.CATEGORICAL_DATA_TYPE,
                          converter=convert,
-                         required_columns={source_column_name: MetaData.TEXT_DATA_TYPE})
+                         required_columns={source_column_name: MetaData.TEXT_DATA_TYPE},
+                         **kwargs)
 
 
 class BinaryResampler(Scrubber):

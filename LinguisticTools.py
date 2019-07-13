@@ -20,7 +20,7 @@ class SynonymLoader:
         self.min_syntactic_distance = DataTypeSpecification('min_syntactic_distance', min_syntactic_distance, float)
 
     def load_synonyms_by_words(self, words: List[str]) -> dict:
-        """ Pass a list of words to this method and get a dict of synoymis back
+        """ Pass a list of words to this method and get a dict of synoyms back
 
         example:
             loader.load_synonyms_by_words(['job', 'in'])
@@ -178,7 +178,7 @@ class StringCategorizer:
         return categories_found
 
     def display_association(self, category: str, key_word: str) -> None:
-        if self.verbosity < 1:
+        if self.verbosity < 2:
             return
 
         print(f"Found {category} using keyword {key_word}.")

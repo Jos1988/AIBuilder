@@ -665,7 +665,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
                                             source_column_name='text_1',
                                             category_keywords_map={'one': ['one'], 'two': ['two'], 'three': ['three']},
                                             unknown_category='unknown',
-                                            verbose=0)
+                                            verbosity=0)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
@@ -677,7 +677,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
     def testScrubbingWithVoting(self):
         scrubber = CategoryByKeywordsFinder(new_column_name='cat_1', source_column_name='text_1',
                                             category_keywords_map={'a': ['we', 'i'], 'b': ['two', 'three', 'one', 'foo', 'bar']},
-                                            unknown_category='unknown', verbose=0)
+                                            unknown_category='unknown', verbosity=0)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
@@ -689,7 +689,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
     def testScrubbingWithMultipleCat(self):
         scrubber = CategoryByKeywordsFinder(new_column_name='cat_1', source_column_name='text_1',
                                             category_keywords_map={'a': ['we', 'i'], 'b': ['two', 'three', 'one', 'foo', 'bar']},
-                                            unknown_category='unknown', verbose=0, multiple_cats=True)
+                                            unknown_category='unknown', verbosity=0, multiple_cats=True)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
@@ -705,7 +705,7 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
                                             unknown_category='unknown',
                                             use_synonyms=True,
                                             min_syntactic_distance=0.01,
-                                            verbose=0)
+                                            verbosity=0)
 
         scrubber.validate(self.data_model)
         result = scrubber.scrub(self.data_model)
