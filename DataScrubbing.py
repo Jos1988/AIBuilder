@@ -1,8 +1,8 @@
 import itertools
 from abc import ABC, abstractmethod
-from collections import Counter
 from typing import List, Union, Optional
 
+from gensim.models import Word2Vec
 from nltk import RegexpTokenizer
 from tqdm import tqdm
 
@@ -12,7 +12,7 @@ from AIBuilder.AIFactory.FeatureColumnStrategies import FromListCategoryGrabber
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, NullSpecification, TypeSpecification, Describer, \
     PrefixedDictSpecification
-from AIBuilder.Data import DataModel, MetaData
+from AIBuilder.Data import DataModel, MetaData, DataException
 from currency_converter import CurrencyConverter
 from datetime import datetime
 import numpy as np
@@ -415,10 +415,6 @@ class AndScrubber(Scrubber):
                 raise DataException('All rows have been scrubbed from DataFrame.')
 
         return data_model
-
-
-class DataException(Exception):
-    pass
 
 
 class BlacklistCatScrubber(Scrubber):
@@ -885,7 +881,7 @@ class CategoryToFloatScrubber(ConvertToColumnScrubber):
             return category_to_value_index[cat]
 
         super().__init__(new_column_name=new_column_name,
-                         new_column_type=MetaData.NUMERICAL_DATA_TYPE,
+                         new_column_type=MetaData.CATEGORICAL_DATA_TYPE,
                          converter=convert,
                          required_columns={source_column_name: MetaData.CATEGORICAL_DATA_TYPE},
                          **kwargs)
@@ -911,6 +907,72 @@ class TokenizeScrubber(ConvertToColumnScrubber):
                          converter=convert,
                          required_columns={source_column_name: MetaData.TEXT_DATA_TYPE},
                          **kwargs)
+
+
+class TextVectorizer(Scrubber):
+    """ Uses Word2Vec model for interpreting text.
+
+        A column with tokenized text is required for interpretation. The aggregate of this text is used to train a
+        Word2Vec model and a vector is created for each row in the data.
+
+        All the words for a given row are vectorized and an average is stored for the respective row.
+
+    """
+
+    def __init__(self, token_column: str, vector_column: str, **kwargs):
+        """
+        Args:
+            token_column: Column in data that contains tokenized text.
+            vector_column: Column name that will be used to generate data column names for vector elements.
+            **kwargs: Arguments passed to Word2Vec model.
+        """
+        self.token_column = DataTypeSpecification('token column', token_column, str)
+        self.vector_column = DataTypeSpecification('vector column', vector_column, str)
+        self.kwargs = DataTypeSpecification('word2vecArgs', kwargs, dict)
+        self.Word2Vec_model = None
+        self.word_vectors = []
+
+    @property
+    def scrubber_config_list(self):
+        return {self.token_column(): MetaData.LIST_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        corpus = list(df[self.token_column()])
+
+        self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
+        self.word_vectors = self.load_word_vectors(corpus)
+
+        vector_column_names = [self.vector_column() + '_' + str(number) for number in range(len(self.vector_column[0]))]
+        df[vector_column_names] = pd.DataFrame(self.word_vectors)
+
+        data_model.set_dataframe(df)
+        data_model.metadata.define_numerical_columns(vector_column_names)
+
+        return data_model
+
+    def load_word_vectors(self, corpus: list):
+        if self.Word2Vec_model is None:
+            raise RuntimeError('Word2Vec model needs to be trained.')
+
+        for tokens in tqdm(corpus):
+            assert type(tokens) is list, f'tokens not list but {type(tokens)}, {tokens}.'
+            tokens = [token for token in tokens if token in self.Word2Vec_model.wv]
+
+            if len(tokens) is 0:
+                raise DataException(f'Row in data has no words to vectorize.')
+
+            vectors = self.Word2Vec_model[tokens]
+            vectors = np.array(vectors)
+            avg_vector = np.average(vectors, axis=0)
+
+            self.word_vectors.append(avg_vector)
 
 
 class ColumnBinner(Scrubber):

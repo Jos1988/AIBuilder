@@ -676,7 +676,8 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
 
     def testScrubbingWithVoting(self):
         scrubber = CategoryByKeywordsFinder(new_column_name='cat_1', source_column_name='text_1',
-                                            category_keywords_map={'a': ['we', 'i'], 'b': ['two', 'three', 'one', 'foo', 'bar']},
+                                            category_keywords_map={'a': ['we', 'i'],
+                                                                   'b': ['two', 'three', 'one', 'foo', 'bar']},
                                             unknown_category='unknown', verbosity=0)
 
         scrubber.validate(self.data_model)
@@ -688,7 +689,8 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
 
     def testScrubbingWithMultipleCat(self):
         scrubber = CategoryByKeywordsFinder(new_column_name='cat_1', source_column_name='text_1',
-                                            category_keywords_map={'a': ['we', 'i'], 'b': ['two', 'three', 'one', 'foo', 'bar']},
+                                            category_keywords_map={'a': ['we', 'i'],
+                                                                   'b': ['two', 'three', 'one', 'foo', 'bar']},
                                             unknown_category='unknown', verbosity=0, multiple_cats=True)
 
         scrubber.validate(self.data_model)
@@ -701,7 +703,8 @@ class TestKeyWordToCategoryScrubber(unittest.TestCase):
     def testScrubbingWithAliases(self):
         scrubber = CategoryByKeywordsFinder(new_column_name='cat_1',
                                             source_column_name='text_1',
-                                            category_keywords_map={'one': ['one'], 'two': ['two'], 'three': ['three'], 'foo bar': ['foo bar']},
+                                            category_keywords_map={'one': ['one'], 'two': ['two'], 'three': ['three'],
+                                                                   'foo bar': ['foo bar']},
                                             unknown_category='unknown',
                                             use_synonyms=True,
                                             min_syntactic_distance=0.01,

@@ -130,7 +130,7 @@ class DataModel:
         self.target_column_name = None
         self.weight_column_name = None
 
-    def get_dataframe(self):
+    def get_dataframe(self) -> pd.DataFrame:
         return self._dataframe
 
     def set_dataframe(self, dataframe: pd.DataFrame):
@@ -256,3 +256,7 @@ class DataLoader:
 
     def set_dataset(self, dataset: DataModel):
         self._ml_data_model = dataset
+
+
+class DataException(Exception):
+    pass
