@@ -206,6 +206,31 @@ class MultipleHotFeatureStrategy(FeatureColumnStrategy):
         return [FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS]
 
 
+class VectorColumnsStrategy(FeatureColumnStrategy):
+    """
+        Adds multiple numeric feature columns for vectors that are being stored in multiple columns.
+    """
+
+    NAME_CONFIG_KEY = 'col_name'
+
+    def build_column(self):
+
+        df = self.data_model.get_dataframe()
+        all_columns = df.columns
+
+        feature_columns = [column for column in all_columns if self.feature_config[self.NAME_CONFIG_KEY] in column]
+        columns = [tf.feature_column.numeric_column(column) for column in feature_columns]
+
+        return columns
+
+    def validate_result(self):
+        pass
+
+    @staticmethod
+    def column_types() -> list:
+        return [FeatureColumnStrategy.VECTOR_COLUMNS]
+
+
 def bucketize_data(column_data: pd.Series, num_buckets: int) -> List[int]:
     min_val = column_data.min()
     max_val = column_data.max()
@@ -286,6 +311,7 @@ class FeatureColumnStrategyFactory:
         CategoricalColumnWithVOCListStrategy,
         IndicatorColumnWithVOCListStrategy,
         MultipleHotFeatureStrategy,
+        VectorColumnsStrategy,
         BucketizedColumnStrategy,
         CrossedColumnStrategy,
     ]  # type: List[FeatureColumnStrategy]
