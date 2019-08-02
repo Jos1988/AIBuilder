@@ -63,7 +63,7 @@ class BuilderSorter(object):
                                .format(builder.__class__.__name__))
 
         for dependency in dependencies:
-            assert dependency in self.builders_by_name, '{} has unknown dependency: {}' \
+            assert dependency in self.builders_by_name, '{} is missing a dependency: {}' \
                 .format(builder.__class__.__name__, dependency)
 
             dependent_builder = self.builders_by_name[dependency]
@@ -118,10 +118,9 @@ class PermutationGenerator(object):
 
 
 class AIFactory:
-
     builder_permutations: List[List[Builder]]
 
-    def __init__(self, builders: List[Builder],  project_name: str, log_dir: str):
+    def __init__(self, builders: List[Builder], project_name: str, log_dir: str):
         self.console_printer = FactoryPrinter(ConsolePrintStrategy())
         self.sorter = BuilderSorter()
         self.project_name = project_name

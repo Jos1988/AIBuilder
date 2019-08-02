@@ -57,7 +57,7 @@ class SynonymLoader:
             synonyms.append(word)
         synonyms = self.reformat_synonyms(synonyms)
 
-        if self.verbosity > 0:
+        if self.verbosity > 1:
             print(f'found synonyms for "{word}": "{synonyms}"')
 
         return synonyms

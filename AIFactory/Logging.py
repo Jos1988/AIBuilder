@@ -7,6 +7,8 @@ import numpy as np
 
 from AIBuilder import AI
 
+BASE_TYPES = [str, int, float, bool]
+
 
 class LogRecord:
     """ Record of one ml model that has been trained an evaluated.
@@ -328,20 +330,27 @@ class CSVLogger(ABC):
 
     @staticmethod
     def check_value(log_value, value):
-        assert len(value) is 1, 'multiple or no result found for "{}", results: {}'.format(log_value, value)
+        assert len(value) is 1, f'multiple or no result found for "{log_value}", results: {value}.'
         value = value.pop()
 
         if type(value).__module__ is np.__name__:
             value = value.item()
 
-        assert type(value) in [str, int, float, bool], \
-            'can only store base data types in metalog, {} of type {} given'.format(value, type(value))
+        if type(value) is list:
+            value = CSVLogger.try_flatten_list(value)
+
+        CSVLogger.check_base_types(value)
 
         return value
 
+    @staticmethod
+    def check_base_types(value):
+        assert type(value) in BASE_TYPES, \
+            f'can only store base data types in metalog, {value} of type {type(value)} given.'
+
     def traverse_dict_for_value(self, data: dict, find_value: str):
         results = []
-        assert type(data) is dict, 'data must be a dict, {} given.'.format(data)
+        assert type(data) is dict, f'data must be a dict, {type(data)} given.'
         for key, value in data.items():
             if key == find_value and type(value) is not dict:
                 results.append(value)
@@ -351,6 +360,19 @@ class CSVLogger(ABC):
                 results = results + self.traverse_dict_for_value(value, find_value)
 
         return results
+
+    @staticmethod
+    def try_flatten_list(input: list) -> str:
+        result = ''
+        for element in input:
+            if type(element) is list:
+                result = result + ' ' + CSVLogger.try_flatten_list(element)
+                continue
+
+            CSVLogger.check_base_types(element)
+            result = result + ' ' + str(element)
+
+        return result
 
     @abstractmethod
     def save_logged_data(self):

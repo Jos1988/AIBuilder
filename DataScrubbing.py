@@ -1,9 +1,12 @@
 import itertools
+import string
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import List, Union, Optional
 
-from gensim.models import Word2Vec
-from nltk import RegexpTokenizer
+from gensim.models import Word2Vec, KeyedVectors
+from nltk import RegexpTokenizer, SnowballStemmer
+from nltk.corpus import stopwords
 from tqdm import tqdm
 
 from AIBuilder.AIFactory import BalanceData
@@ -18,6 +21,7 @@ from datetime import datetime
 import numpy as np
 from scipy import stats
 import pandas as pd
+import re
 
 from AIBuilder.Summizer import TimeSummizer
 from AIBuilder.LinguisticTools import SynonymLoader, StringCategorizer
@@ -504,11 +508,11 @@ class BlacklistTokenScrubber(Scrubber):
             verbosity: larger than 0, displays progress bar.
         """
         blacklist = list(map(lambda w: w.lower(), blacklist))
-        self.blacklist = DataTypeSpecification('blacklist', blacklist, List[str])
-        self.column_name = DataTypeSpecification('column_name', column_name, str)
+        self.blacklist = DataTypeSpecification('blackltoken blacklist', blacklist, List[str])
+        self.column_name = DataTypeSpecification('blackltoken column_name', column_name, str)
         self.verbosity = verbosity
-        self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
-        self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', min_syntactic_distance, float)
+        self.use_synonyms = DataTypeSpecification('blackltoken use synonyms', use_synonyms, bool)
+        self.min_syntactic_distance = DataTypeSpecification('blackltoken min syntactic distance', min_syntactic_distance, float)
         self.used_blacklist = self.blacklist()
 
         if self.use_synonyms():
@@ -909,6 +913,198 @@ class TokenizeScrubber(ConvertToColumnScrubber):
                          **kwargs)
 
 
+class HTMLScrubber(Scrubber):
+    """ Removes html from text column by '<' and '>' and everything in between. """
+
+    def __init__(self, text_column: str, new_text_column: Optional[str] = None, verbosity: int = 0):
+        self.text_column = DataTypeSpecification('html_text_column', text_column, str)
+        self.new_text_column = DataTypeSpecification('new_html_text_column', text_column, str)
+        self.verbosity = DataTypeSpecification('verbosity', verbosity, int)
+        if new_text_column is not None:
+            self.new_text_column = DataTypeSpecification('new_html_text_column', new_text_column, str)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.text_column(): MetaData.TEXT_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        html_remover = re.compile('<.*?>')
+
+        if self.verbosity() > 0:
+            tqdm.pandas()
+            df[self.new_text_column()] = df[self.text_column()].progress_apply(lambda text: re.sub(html_remover, ' ', text))
+        else:
+            df[self.new_text_column()] = df[self.text_column()].apply(lambda text: re.sub(html_remover, ' ', text))
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class PunctuationScrubber(Scrubber):
+    """ Removes punctuation from text column. """
+
+    def __init__(self, text_column: str, new_text_column: Optional[str] = None, verbosity: int = 0):
+        self.text_column = DataTypeSpecification('punc_text_column', text_column, str)
+        self.new_text_column = DataTypeSpecification('new_punc_text_column', text_column, str)
+        self.verbosity = DataTypeSpecification('verbosity', verbosity, int)
+        if new_text_column is not None:
+            self.new_text_column = DataTypeSpecification('new_punc_text_column', new_text_column, str)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.text_column(): MetaData.TEXT_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+
+        if self.verbosity() > 0:
+            tqdm.pandas()
+            df[self.new_text_column()] = df[self.text_column()].progress_apply(
+                lambda s: s.translate(str.maketrans('', '', string.punctuation))
+            )
+        else:
+            df[self.new_text_column()] = df[self.text_column()].apply(
+                lambda s: s.translate(str.maketrans('', '', string.punctuation))
+            )
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class LowerTextScrubber(Scrubber):
+    """ Removes all capital letters from text column. """
+
+    def __init__(self, text_column: str, new_text_column: Optional[str] = None, verbosity: int = 0):
+        self.text_column = DataTypeSpecification('lower_text_column', text_column, str)
+        self.new_text_column = DataTypeSpecification('new_lower_text_column', text_column, str)
+        self.verbosity = DataTypeSpecification('verbosity', verbosity, int)
+        if new_text_column is not None:
+            self.new_text_column = DataTypeSpecification('new_lower_text_column', new_text_column, str)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.text_column(): MetaData.TEXT_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+
+        if self.verbosity() > 0:
+            tqdm.pandas()
+            df[self.new_text_column()] = df[self.text_column()].progress_apply(
+                lambda s: s.lower()
+            )
+        else:
+            df[self.new_text_column()] = df[self.text_column()].apply(
+                lambda s: s.lower()
+            )
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class StopWordScrubber(Scrubber):
+    """ Removes stop words from tokenized column. """
+
+    def __init__(self, column: str, new_column: Optional[str] = None, verbosity: int = 0,
+                 language: str = 'english'):
+        self.column = DataTypeSpecification('sw_column', column, str)
+        self.new_column = DataTypeSpecification('new_sw_column', column, str)
+        self.verbosity = DataTypeSpecification('verbosity', verbosity, int)
+        self.stopwords = stopwords.words(language)
+        if new_column is not None:
+            self.new_column = DataTypeSpecification('new_sw_text_column', new_column, str)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.column(): MetaData.LIST_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        sentences = df[self.column()].to_list()
+
+        if self.verbosity() > 0:
+            sentences = tqdm(sentences)
+
+        scrubbed_sentences = []
+        for sentence in sentences:
+            scrubbed_sentences.append([word for word in sentence if word not in self.stopwords])
+
+        df[self.new_column()] = scrubbed_sentences
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
+class WordStemmer(Scrubber):
+    """ Stems words in tokenized column. """
+
+    def __init__(self, column: str, new_column: Optional[str] = None, verbosity: int = 0,
+                 language: str = 'english'):
+        self.column = DataTypeSpecification('stem_column', column, str)
+        self.new_column = DataTypeSpecification('new_stem_column', column, str)
+        self.verbosity = DataTypeSpecification('verbosity', verbosity, int)
+        self.stopwords = stopwords.words(language)
+        self.stemmer = SnowballStemmer(language)
+        if new_column is not None:
+            self.new_column = DataTypeSpecification('new_stem_text_column', new_column, str)
+
+    @property
+    def scrubber_config_list(self):
+        return {self.column(): MetaData.LIST_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        sentences = df[self.column()].to_list()
+
+        if self.verbosity() > 0:
+            sentences = tqdm(sentences)
+
+        stemmed_sentences = []
+        for sentence in sentences:
+            stemmed_sentences.append([self.stemmer.stem(word) for word in sentence])
+
+        df[self.new_column()] = stemmed_sentences
+
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
 class TextVectorizer(Scrubber):
     """ Uses Word2Vec model for interpreting text.
 
@@ -919,18 +1115,28 @@ class TextVectorizer(Scrubber):
 
     """
 
-    def __init__(self, token_column: str, vector_column: str, **kwargs):
+    def __init__(self, token_column: str, vector_column: str, use_existing_model: bool = False,
+                 model_file: Optional[Path] = None, **kwargs):
         """
         Args:
             token_column: Column in data that contains tokenized text.
             vector_column: Column name that will be used to generate data column names for vector elements.
+            use_existing_model: Use Word2Vec model instead of training the model.
+            model_file: If existing_model is True, expects a Path object, referring to the models file location.
             **kwargs: Arguments passed to Word2Vec model.
+
+            Note: Model file must be a binary.
         """
         self.token_column = DataTypeSpecification('token column', token_column, str)
         self.vector_column = DataTypeSpecification('vector column', vector_column, str)
-        self.kwargs = DataTypeSpecification('word2vecArgs', kwargs, dict)
+        self.kwargs = PrefixedDictSpecification('word2vecArgs', 'w2v', kwargs)
+        self.use_existing_model = DataTypeSpecification('use_existing_model', use_existing_model, bool)
+        self.model_file_spec = NullSpecification('model_file')
         self.Word2Vec_model = None
         self.word_vectors = []
+        if use_existing_model:
+            self.model_file_spec = DataTypeSpecification('model_file', model_file.name, str)
+            self.model_file = model_file
 
     @property
     def scrubber_config_list(self):
@@ -946,10 +1152,15 @@ class TextVectorizer(Scrubber):
         df = data_model.get_dataframe()
         corpus = list(df[self.token_column()])
 
-        self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
-        self.word_vectors = self.load_word_vectors(corpus)
+        if self.Word2Vec_model is None:
+            # only runs when first time scrub is called.
+            if self.use_existing_model():
+                self.Word2Vec_model = KeyedVectors.load_word2vec_format(str(self.model_file.absolute()), binary=True)
+            else:
+                self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
 
-        vector_column_names = [self.vector_column() + '_' + str(number) for number in range(len(self.vector_column[0]))]
+        self.load_word_vectors(corpus)
+        vector_column_names = [self.vector_column() + '_' + str(number) for number in range(len(self.word_vectors[0]))]
         df[vector_column_names] = pd.DataFrame(self.word_vectors)
 
         data_model.set_dataframe(df)
@@ -1021,9 +1232,9 @@ class CategoryByKeywordsFinder(ConvertToColumnScrubber):
         :param verbosity: bool, 0: not verbose, 1: verbose, 2: very verbose
         """
         self.verbosity = verbosity
-        self.multiple_cats = DataTypeSpecification('multiple cats', multiple_cats, bool)
-        self.use_synonyms = DataTypeSpecification('use synonyms', use_synonyms, bool)
-        self.min_syntactic_distance = DataTypeSpecification('min syntactic distance', min_syntactic_distance, float)
+        self.multiple_cats = DataTypeSpecification('cat_key multiple cats', multiple_cats, bool)
+        self.use_synonyms = DataTypeSpecification('cat_key use synonyms', use_synonyms, bool)
+        self.min_syntactic_distance = DataTypeSpecification('cat_key min syntactic distance', min_syntactic_distance, float)
 
         if self.use_synonyms():
             synonym_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance(),

@@ -182,7 +182,7 @@ class PreRunLogObserver(Observer):
             raise AssertionError('Meta log file not compatible, expecting following headers: {}'.format(reader.all_names))
 
     def get_path(self, event: Event, file_name: str) -> str:
-        return event.session.log_dir + '/' + event.session.project_name + '/' + file_name
+        return event.session.log_dir + '/' + file_name
 
     def load_meta_logger(self, event, path: Path):
         meta_logger = MetaLogger(
@@ -353,7 +353,7 @@ class PostEvaluationLogObserver(Observer):
         event.session.summary_logger.save_logged_data()
 
     def update_report(self, event):
-        report = event.tester.get_report_file('ax')
+        report = event.tester.get_report_file('a')
         report_printer = TesterPrinter(ReportPrintStrategy(report=report))
         report_printer.line('')
         report_printer.print_ai_description(

@@ -1,3 +1,5 @@
+import os
+import warnings
 from typing import List
 
 import pandas as pd
@@ -223,6 +225,9 @@ class AITester(AbstractAITester):
 
     def get_report_file(self, mode: str):
         path = self.ml_model.get_log_dir() + '/ai_reports.txt'
+
+        if not os.path.isfile(path):
+            warnings.warn(f'Reports file missing, will attempt to creating new file: "{path}".')
 
         report = open(path, mode=mode)
         return report

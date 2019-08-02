@@ -97,7 +97,17 @@ class DataTypeSpecification(Specification):
 
 
 class PrefixedDictSpecification(DataTypeSpecification):
+    """ Saves dict of data, but prefixes the keys.
+
+    data = {'snake': 'constrictor', 'cheese': 'Brie'}
+    Example: PrefixedDictSpecification('name', 'ham', data)
+
+    description:
+    'name': {'ham_snake': 'constrictor', 'ham_cheese': 'Brie'}
+
+    """
     def __init__(self, name: str, prefix: str, value):
+
         super().__init__(name, value, dict)
         self.prefix = prefix
 

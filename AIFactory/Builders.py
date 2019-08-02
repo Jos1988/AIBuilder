@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 
@@ -205,8 +206,6 @@ class EvalDataSplitterBuilder(DataSplitterBuilder):
         """ Splits data already set on the ml model, using either the training data or evaluation data as source.
         The respective data is then split and loaded back into the training and evaluation data of the model.
 
-        todo: perhaps the data builder should split the data.
-
         :param evaluation_data_perc: Percentage of data that will be cut of from data in data source and set to
                                      evaluation data of the ml model.
         :param data_source:          Data used to split.
@@ -246,16 +245,16 @@ class EvalDataSplitterBuilder(DataSplitterBuilder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, neural_net: AbstractAI):
-        data = self.select_data(neural_net)
+    def build(self, ml_model: AbstractAI):
+        data = self.select_data(ml_model)
         if self.randomize():
             self.randomize_data(data, self.seed())
 
         splitter = DataSetSplitter(data_model=data)
         split_data = splitter.split_by_ratio([self.training_data_percentage(), self.evaluation_data_perc()])
 
-        neural_net.set_training_data(split_data[0])
-        neural_net.set_evaluation_data(split_data[1])
+        ml_model.set_training_data(split_data[0])
+        ml_model.set_evaluation_data(split_data[1])
 
     def select_data(self, neural_net: AbstractAI) -> DataModel:
         if self.data_source() == self.TRAINING_DATA:
@@ -276,7 +275,7 @@ class EstimatorBuilder(Builder):
 
         :param estimator_type: valid estimator strategy
         :param config_kwargs: pass the kwargs for a tf.estimator.RunConfig here, otherwise it will not be printed
-        correctly in description.
+                correctly in description.
         :param kwargs: estimator kwargs, do not pass objects if config is printed. //todo: find way to accurately print objects.
         """
         super().__init__()
@@ -334,7 +333,8 @@ class InputFunctionBuilder(Builder):
 
     VALID_FN_NAMES = [BASE_FN, PANDAS_FN]
 
-    def __init__(self, train_fn: str = None, train_kwargs: dict = None, evaluation_fn: str = None, evaluation_kwargs: dict = None,
+    def __init__(self, train_fn: str = None, train_kwargs: dict = None, evaluation_fn: str = None,
+                 evaluation_kwargs: dict = None,
                  prediction_fn: str = None, prediction_kwargs: dict = None):
         super().__init__()
         self.fn_holder = InputFunctionHolder
@@ -363,8 +363,6 @@ class InputFunctionBuilder(Builder):
             # todo: idem.
             self.prediction_kwargs = prediction_kwargs
             self.prediction_kwargs_descr = PrefixedDictSpecification('prediction_kwargs', 'pred', prediction_kwargs)
-
-
 
     @property
     def dependent_on(self) -> list:
@@ -413,20 +411,20 @@ class InputFunctionBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, neural_net: AbstractAI):
+    def build(self, ml_model: AbstractAI):
         if self.build_train:
-            train_function = self.assign_fn(neural_net.training_data, self.train_fn_name(), self.train_kwargs)
-            neural_net.set_training_fn(train_function)
+            train_function = self.assign_fn(ml_model.training_data, self.train_fn_name(), self.train_kwargs)
+            ml_model.set_training_fn(train_function)
 
         if self.build_eval:
-            evaluation_function = self.assign_fn(neural_net.evaluation_data, self.evaluation_fn_name(),
+            evaluation_function = self.assign_fn(ml_model.evaluation_data, self.evaluation_fn_name(),
                                                  self.evaluation_kwargs)
-            neural_net.set_evaluation_fn(evaluation_function)
+            ml_model.set_evaluation_fn(evaluation_function)
 
         if self.build_predict:
-            prediction_function = self.assign_prediction_fn(neural_net.prediction_data, self.prediction_fn_name(),
-                                                 self.prediction_kwargs)
-            neural_net.set_prediction_fn(prediction_function)
+            prediction_function = self.assign_prediction_fn(ml_model.prediction_data, self.prediction_fn_name(),
+                                                            self.prediction_kwargs)
+            ml_model.set_prediction_fn(prediction_function)
 
 
 class NamingSchemeBuilder(Builder):
@@ -481,6 +479,11 @@ class NamingSchemeBuilder(Builder):
 
     def get_logged_names(self):
         tensor_board_path = self.AI.get_log_dir() + '/tensor_board'
+
+        if not os.path.isdir(tensor_board_path):
+            warnings.warn(f'Creating missing tensor board dir {tensor_board_path}.')
+            os.makedirs(tensor_board_path)
+
         return next(os.walk(tensor_board_path))[1]
 
     def get_version(self, name: str):
@@ -676,6 +679,11 @@ class MetadataBuilder(Builder):
 
 class FeatureColumnBuilder(Builder):
 
+    MULTIPLE_COLUMNS_FEATURE = [
+        FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
+        FeatureColumnStrategy.VECTOR_COLUMNS
+    ]
+
     def __init__(self, feature_columns: dict, feature_config: dict = None):
         super().__init__()
         self.feature_config = DataTypeSpecification('feature_config', feature_config, dict)
@@ -730,21 +738,22 @@ class FeatureColumnBuilder(Builder):
     def add_feature_col_names_to_data_model(self, data_model):
         for column_data in self.feature_columns():
 
-            if column_data['type'] is FeatureColumnStrategy.MULTIPLE_HOT_COLUMNS:
-                self.load_bin_column_names(column_data['name'], data_model)
+            if column_data['type'] in self.MULTIPLE_COLUMNS_FEATURE:
+                self.load_columns_by_prefix(column_data['name'], data_model)
                 continue
 
             if column_data['type'] is FeatureColumnStrategy.CROSSED_COLUMN:
                 continue
+
             data_model.add_feature_column(column_data['name'])
 
     @staticmethod
-    def load_bin_column_names(column_name: str, data_model):
-        binary_column_prefix = column_name + '_'
+    def load_columns_by_prefix(column_name: str, data_model):
         # prefix convention implemented in 'MultipleCatListToMultipleHotScrubber'.
-        for column in data_model.get_dataframe().columns:
-            if binary_column_prefix in column:
-                data_model.add_feature_column(column)
+        column_prefix = column_name + '_'
+        columns = [column for column in data_model.get_dataframe().columns if column_prefix in column]
+        for column in columns:
+            data_model.add_feature_column(column)
 
     def validate_target_not_in_features(self, data: DataModel):
         target_column = data.target_column_name

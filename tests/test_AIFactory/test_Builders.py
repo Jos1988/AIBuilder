@@ -383,7 +383,7 @@ class TestDataSplitterBuilder(unittest.TestCase):
         arti.get_evaluation_data.return_value = evaluation_model
         arti.set_evaluation_data = mock.Mock()
 
-        builder.build(neural_net=arti)
+        builder.build(ml_model=arti)
 
         arti.set_evaluation_data.assert_called_once()
         arti.set_training_data.assert_called_once()

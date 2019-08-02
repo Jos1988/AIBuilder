@@ -1,45 +1,78 @@
 import pandas as pd
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Union
 import tensorflow as tf
 from AIBuilder.Data import DataModel
 
 
 class FeatureColumnStrategy(ABC):
+    """ Strategy to build one or more tf.feature column for the ml model."""
+
     CATEGORICAL_COLUMN_IDENTITY = 'categorical_column_with_identity'
     INDICATOR_COLUMN_VOC_LIST = 'indicator_column'
     NUMERICAL_COLUMN = 'numeric_column'
     CATEGORICAL_COLUMN_VOC_LIST = 'categorical_column_with_vocabulary_list'
     MULTIPLE_HOT_COLUMNS = 'multiple_hot_columns'
+    VECTOR_COLUMNS = 'vector_columns'
     BUCKETIZED_COLUMN = 'bucketized_column'
     CROSSED_COLUMN = 'crossed_column'
 
-    ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,
-                   INDICATOR_COLUMN_VOC_LIST, MULTIPLE_HOT_COLUMNS, BUCKETIZED_COLUMN, CROSSED_COLUMN]
+    ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,INDICATOR_COLUMN_VOC_LIST,
+                   MULTIPLE_HOT_COLUMNS, BUCKETIZED_COLUMN, CROSSED_COLUMN, VECTOR_COLUMNS]
+
+    """ Results of building process will be stored in this attribute. """
+    results: Union[None, list]
 
     def __init__(self, column_name: str, data_model: DataModel, feature_config: dict = None):
+        """
+
+        Args:
+            column_name: Name of column to build feature model for.
+            data_model: Data model to build feature column for and finally add feature column to.
+            feature_config: Various Data that can be passed to the strategy.
+        """
         self.feature_config = feature_config
         self.data_model = data_model
         self.column_name = column_name
         self.results = None
 
     def build(self) -> list:
+        """ Run building process, called by factory."""
         self.results = self.build_column()
         self.validate_result()
 
         return self.results
 
     @abstractmethod
-    def build_column(self):
+    def build_column(self) -> list:
+        """
+        Build the column(s) in this method and return it/them in a list.
+
+        Returns: list
+
+        """
         pass
 
     @abstractmethod
     def validate_result(self):
+        """
+        Validate the result of the building process.
+
+        This method is ran after building the feature columns, the 'result' attribute should contain the output of
+        build_column.
+
+        Returns:
+
+        """
         pass
 
     @staticmethod
     @abstractmethod
     def column_types() -> list:
+        """ Return list of feature column types, usually just one.
+        Returns: list
+
+        """
         pass
 
 
@@ -131,7 +164,7 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 class MultipleHotFeatureStrategy(FeatureColumnStrategy):
     """ This strategy adds a categorical feature column for every category found in the data column.
 
-    The categorical features have two categories 0 and 1 and are named after their respected catogry prefixed with
+    The categorical features have two categories 0 and 1 and are named after their respective catagory prefixed with
     the name of the original column.
 
     example:
@@ -270,7 +303,7 @@ class FeatureColumnStrategyFactory:
 
                 return strategy(column_name, data_model, column_feature_config)
 
-        raise RuntimeError('feature column type ({}) not found for column {}'.format(column_type, column_name))
+        raise RuntimeError(f'feature column type ("{column_type}") not found for column "{column_name}".')
 
 
 class CategoryGrabber(ABC):

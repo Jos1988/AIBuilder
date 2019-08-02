@@ -9,7 +9,8 @@ from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, A
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlacklistCatScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
     CategoryByKeywordsFinder, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy, \
-    BlacklistTokenScrubber
+    BlacklistTokenScrubber, HTMLScrubber, PunctuationScrubber, StopWordScrubber, LowerTextScrubber, \
+    WordStemmer
 
 
 class TestConvertToNumericScrubber(unittest.TestCase):
@@ -773,6 +774,254 @@ class TestBinaryResampler(unittest.TestCase):
 
         # all weights combined should approx. equal the length of the dataframe because that indicate an average weight of 1.
         self.assertAlmostEqual(len(df), sum(df[BalanceData.WEIGHTS_COLUMN].values))
+
+
+# class testDataRegrouper(unittest.TestCase):
+#
+#     def setUp(self) -> None:
+#         n = 12
+#         data = {
+#             'attr_one': 6 * ['ham'] + 1 * ['spam'] + 5 * ['eggs'],
+#             'attr_two': int(n / 2) * [1, 0],
+#             'text': n * ['this is some text ']
+#         }
+#
+#         metadata = MetaData()
+#         self.df = pd.DataFrame(data)
+#         self.data_model = DataModel(self.df)
+#         self.data_model.metadata = metadata
+#
+#     def testRegroupingWithSize2(self):
+#         scrubber = DataRowMerger(group_by='attr_two', spread_by='attr_one', group_size=2)
+#         scrubber.scrub(self.data_model)
+#         df = self.data_model.get_dataframe()
+#
+#         for merged_title in df['attr_one']:
+#             self.assertLessEqual(merged_title.count('ham'), 1)
+#             self.assertLessEqual(merged_title.count('spam'), 1)
+#             self.assertLessEqual(merged_title.count('eggs'), 1)
+
+
+class testHTMLScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {'text': ['<p>this is some text</p>',
+                         '<h1 id="bla", class="blabla", style="transform: translatyeY(-50%)">this is some more text</h1>',
+                         '<p>and even <b>more</b> text, damn</p>']
+                }
+
+        metadata = MetaData()
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def testHTMLRemoval(self):
+        scrubber = HTMLScrubber('text')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['text']:
+            self.validate_string(text)
+
+    def validate_string(self, text):
+        self.assertFalse('>' in text)
+        self.assertFalse('<' in text)
+        self.assertFalse('bla' in text)
+        self.assertFalse('transform' in text)
+        self.assertFalse('50%' in text)
+
+    def testHTMLRemoval_verbose(self):
+        scrubber = HTMLScrubber('text', verbosity=1)
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['text']:
+            self.validate_string(text)
+
+    def testHTMLRemoval_new_col(self):
+        scrubber = HTMLScrubber(text_column='text', new_text_column='new')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['new']:
+            self.validate_string(text)
+
+
+class testPunctuationScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {'text': ['This is, some text.', 'Is this, (some) text!?',
+                         'Would you like: ham, spam and eggs; spam, ham and eggs or eggs, ham and spam?']}
+
+        metadata = MetaData()
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def test_punc_removal(self):
+        scrubber = PunctuationScrubber('text')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['text']:
+            self.validate_string(text)
+
+    def validate_string(self, text):
+        self.assertFalse(',' in text)
+        self.assertFalse('.' in text)
+        self.assertFalse(';' in text)
+        self.assertFalse(':' in text)
+        self.assertFalse('!' in text)
+        self.assertFalse('?' in text)
+        self.assertFalse('(' in text)
+        self.assertFalse(')' in text)
+
+    def test_punc_removal_verbose(self):
+        scrubber = PunctuationScrubber('text', verbosity=1)
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['text']:
+            self.validate_string(text)
+
+    def test_punc_removal_new_col(self):
+        scrubber = PunctuationScrubber(text_column='text', new_text_column='new')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['new']:
+            self.validate_string(text)
+
+
+class testLowerTextScrubber(unittest.TestCase):
+
+    def setUp(self):
+        data = {'text': ['This is some text.', 'Get some text ASAP?', 'This is some text for John and Joan']}
+
+        metadata = MetaData()
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def test_lower(self):
+        scrubber = LowerTextScrubber('text')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['text']:
+            self.validate_string(text)
+
+    def validate_string(self, text: str):
+        self.assertEqual(text, text.lower())
+
+    def test_lower_verbose(self):
+        scrubber = LowerTextScrubber('text', verbosity=1)
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['text']:
+            self.validate_string(text)
+
+    def test_lower_new_col(self):
+        scrubber = LowerTextScrubber(text_column='text', new_text_column='new')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for text in df['new']:
+            self.validate_string(text)
+
+
+class StopWordScrubberTest(unittest.TestCase):
+
+    def setUp(self):
+        data = {'test': [['this', 'sentence', 'has', 'multiple', 'stopwords'],
+                         ['this', 'sentence', 'one', 'multiple', 'too'], ['verb', 'noun'], ['too', 'than', 'can']]
+                }
+
+        metadata = MetaData()
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def test_scrubbing_new_column(self):
+        scrubber = StopWordScrubber(column='test', new_column='test2')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for row in df['test2']:
+            self.assertFalse('this' in row)
+            self.assertFalse('has' in row)
+            self.assertFalse('too' in row)
+            self.assertFalse('than' in row)
+            self.assertFalse('can' in row)
+
+        self.assertEqual(5, len(df['test'][0]))
+        self.assertEqual(5, len(df['test'][1]))
+        self.assertEqual(2, len(df['test'][2]))
+        self.assertEqual(3, len(df['test'][3]))
+
+    def test_scrubbing(self):
+        scrubber = StopWordScrubber(column='test')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for row in df['test']:
+            self.assertFalse('this' in row)
+            self.assertFalse('has' in row)
+            self.assertFalse('too' in row)
+            self.assertFalse('than' in row)
+            self.assertFalse('can' in row)
+
+    def test_verbose_scrubbing(self):
+        scrubber = StopWordScrubber(column='test', verbosity=1)
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        for row in df['test']:
+            self.assertFalse('this' in row)
+            self.assertFalse('has' in row)
+            self.assertFalse('too' in row)
+            self.assertFalse('than' in row)
+            self.assertFalse('can' in row)
+
+
+class WordStemmerTest(unittest.TestCase):
+
+    def setUp(self):
+        data = {'test': [['is', 'this', 'a', 'stemmable', 'sentence'],
+                         ['cats', 'are', 'smarter', 'than', 'dogs']]
+                }
+
+        metadata = MetaData()
+        self.df = pd.DataFrame(data)
+        self.data_model = DataModel(self.df)
+        self.data_model.metadata = metadata
+
+    def test_scrubbing(self):
+        scrubber = WordStemmer(column='test')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        self.assertEqual(df['test'][0], ['is', 'this', 'a', 'stemmabl', 'sentenc'])
+        self.assertEqual(df['test'][1], ['cat', 'are', 'smarter', 'than', 'dog'])
+
+    def test_scrubbing_verbose(self):
+        scrubber = WordStemmer(column='test', verbosity=1)
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        self.assertEqual(df['test'][0], ['is', 'this', 'a', 'stemmabl', 'sentenc'])
+        self.assertEqual(df['test'][1], ['cat', 'are', 'smarter', 'than', 'dog'])
+
+    def test_scrubbing_new_col(self):
+        scrubber = WordStemmer(column='test', new_column='new')
+        scrubber.scrub(self.data_model)
+
+        df = self.data_model.get_dataframe()
+        self.assertEqual(df['new'][0], ['is', 'this', 'a', 'stemmabl', 'sentenc'])
+        self.assertEqual(df['new'][1], ['cat', 'are', 'smarter', 'than', 'dog'])
+        self.assertEqual(df['test'][0], ['is', 'this', 'a', 'stemmable', 'sentence'])
+        self.assertEqual(df['test'][1], ['cats', 'are', 'smarter', 'than', 'dogs'])
 
 
 if __name__ == '__main__':
