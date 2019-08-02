@@ -122,6 +122,9 @@ class DNNClassifier(EstimatorStrategy):
                   'optimizer': self.ML_Model.optimizer,
                   'model_dir': self.get_model_dir(), }
 
+        if self.ML_Model.optimizer is None:
+            del kwargs['optimizer']
+
         kwargs.update(self.kwargs)
         self.validate_kwargs(kwargs)
         estimator = tf.estimator.DNNClassifier(**kwargs)
