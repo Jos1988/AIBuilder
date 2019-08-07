@@ -1,4 +1,5 @@
 from typing import List, Dict, Any
+from itertools import chain
 from AIBuilder.AI import AI, AbstractAI
 from AIBuilder.AIFactory.Builders import Builder
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
@@ -127,6 +128,8 @@ class AIFactory:
         self.log_dir = log_dir
         self.permutation_generator = PermutationGenerator()
         self.builder_permutations = self.permutation_generator.generate(builders=builders)
+        self.caching_instruction_loader = CachingInstructionsLoader(manager=smart_cache_manager)
+        self.caching_instruction_loader.set_caching_instructions(self.builder_permutations)
 
     def count_remaining_models(self):
         return len(self.builder_permutations)

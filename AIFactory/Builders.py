@@ -466,16 +466,18 @@ class NamingSchemeBuilder(Builder):
     def generate_name(self):
         for name in self.existing_names:
             version = self.get_version(name=name)
-            if version is not False:
-                self.versions.append(version)
+            self.versions.append(version)
 
         last_version = 0
         if len(self.versions) > 0:
             last_version = max(self.versions)
 
         new_version = last_version + 1
-        name = self.AI.get_project_name() + '_' + str(new_version)
-        self.AI.set_name(name)
+        new_name = self.AI.get_project_name() + '_' + str(new_version)
+
+        assert new_name not in self.existing_names, f'New model name not unique, {new_name} already in tensor board folder.'
+
+        self.AI.set_name(new_name)
 
     def get_logged_names(self):
         tensor_board_path = self.AI.get_log_dir() + '/tensor_board'
@@ -486,13 +488,14 @@ class NamingSchemeBuilder(Builder):
 
         return next(os.walk(tensor_board_path))[1]
 
-    def get_version(self, name: str):
+    def get_version(self, name: str) -> int:
         exploded = name.split('_')
 
-        if exploded[0] == self.AI.get_project_name() and len(exploded) > 1 and exploded[1].isnumeric():
-            return int(exploded[1])
+        version_nr = exploded[-1:][0]
+        if version_nr.isnumeric():
+            return int(version_nr)
 
-        return False
+        raise RuntimeError(f'could not resolve version of model name: "{name}".')
 
 
 class OptimizerBuilder(Builder):
