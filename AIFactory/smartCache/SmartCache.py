@@ -1,4 +1,5 @@
 import functools
+from copy import deepcopy
 from typing import List, Optional
 
 
@@ -203,7 +204,7 @@ class SmartCacheManager:
 
     def set_cache(self, obj: object, method: str, method_output):
         call = MethodCall.create(obj, method)
-        self.cache[str(call.obj_hash) + method] = method_output
+        self.cache[str(call.obj_hash) + method] = deepcopy(method_output)
 
     def load_from_cache(self, obj: object, method: str):
         call = MethodCall.create(obj, method)
