@@ -1,4 +1,3 @@
-import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 
@@ -10,7 +9,6 @@ from AIBuilder.AIFactory.smartCache.SmartCache import smart_cache
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
-import os
 import numpy as np
 from typing import Optional
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, TypeSpecification, \
@@ -28,7 +26,6 @@ class Builder(ABC, Describer):
     META_DATA = 'meta_data'
     SCRUBBER = 'scrubber'
     INPUT_FUNCTION = 'input_function'
-    NAMING_SCHEME = 'naming'
     DATA_SPLITTER = 'data_splitter'
 
     builder_registry = []
@@ -312,7 +309,7 @@ class EstimatorBuilder(Builder):
 
     @property
     def dependent_on(self) -> list:
-        return [self.OPTIMIZER, self.NAMING_SCHEME, self.FEATURE_COLUMN]
+        return [self.OPTIMIZER, self.FEATURE_COLUMN]
 
     @property
     def builder_type(self) -> str:
@@ -440,78 +437,6 @@ class InputFunctionBuilder(Builder):
             ml_model.set_prediction_fn(prediction_function)
 
         return ml_model
-
-
-class NamingSchemeBuilder(Builder):
-
-    def __init__(self):
-        super().__init__()
-        self.versions = []
-        self.AI = None
-        self.existing_names = []
-
-    @property
-    def dependent_on(self) -> list:
-        return []
-
-    @property
-    def builder_type(self) -> str:
-        return self.NAMING_SCHEME
-
-    def validate(self):
-        pass
-
-    @smart_cache
-    def build(self, ml_model: AbstractAI) -> AbstractAI:
-        self.AI = ml_model
-        self.existing_names = self.get_logged_names()
-
-        if self.AI.get_name() is None or self.AI.get_name() is self.AI.get_project_name():
-            self.generate_name()
-            return ml_model
-
-        if self.AI.get_name() in self.existing_names:
-            self.AI.set_name(self.AI.get_name() + '_1')
-            return ml_model
-
-        if self.AI.get_name() is not None:
-            return ml_model
-
-        raise RuntimeError('Naming scheme failed to set name.')
-
-    def generate_name(self):
-        for name in self.existing_names:
-            version = self.get_version(name=name)
-            self.versions.append(version)
-
-        last_version = 0
-        if len(self.versions) > 0:
-            last_version = max(self.versions)
-
-        new_version = last_version + 1
-        new_name = self.AI.get_project_name() + '_' + str(new_version)
-
-        assert new_name not in self.existing_names, f'New model name not unique, {new_name} already in tensor board folder.'
-
-        self.AI.set_name(new_name)
-
-    def get_logged_names(self):
-        tensor_board_path = self.AI.get_log_dir() + '/tensor_board'
-
-        if not os.path.isdir(tensor_board_path):
-            warnings.warn(f'Creating missing tensor board dir {tensor_board_path}.')
-            os.makedirs(tensor_board_path)
-
-        return next(os.walk(tensor_board_path))[1]
-
-    def get_version(self, name: str) -> int:
-        exploded = name.split('_')
-
-        version_nr = exploded[-1:][0]
-        if version_nr.isnumeric():
-            return int(version_nr)
-
-        raise RuntimeError(f'could not resolve version of model name: "{name}".')
 
 
 class OptimizerBuilder(Builder):

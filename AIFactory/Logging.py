@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 
 from AIBuilder import AI
+from AIBuilder.AI import AbstractAI
 
 BASE_TYPES = [str, int, float, bool]
 

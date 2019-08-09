@@ -1,10 +1,11 @@
 from typing import List, Dict, Any
 from itertools import chain
 from AIBuilder.AI import AI, AbstractAI
-from AIBuilder.AIFactory.Builders import Builder
+from AIBuilder.AIFactory.Builders import Builder, EstimatorBuilder
 from AIBuilder.AIFactory.Printing import ConsolePrintStrategy, FactoryPrinter
 from AIBuilder.AIFactory.smartCache.SmartCache import SmartCacheManager, InstructionSet, Instruction, \
     smart_cache_manager
+from AIBuilder.Dispatching import Dispatcher, PreBuilderObserver, ModelEvent, KernelDispatcher
 
 
 class BuilderSorter(object):
@@ -188,6 +189,9 @@ class CachingInstructionsLoader:
     USE_CACHE = 'use_cache'
     NO_ACTION = 'no_action'
 
+    # Do not cache estimator builder as it must assign a unique name to the estimator every time.
+    BLACK_LIST = [EstimatorBuilder]
+
     def __init__(self, manager: SmartCacheManager):
         self.manager = manager
         self.all_prev_builder_combinations = []
@@ -205,7 +209,7 @@ class CachingInstructionsLoader:
         self.map_instructions_to_models(models)
         models = chain.from_iterable(models)
         loaded_builders = []
-        for model in models:t
+        for model in models:
             if model.builder not in loaded_builders:
                 self.manager.add_request_instructions(model.builder, 'build', model.builder_instructions)
                 loaded_builders.append(model.builder)
@@ -239,6 +243,9 @@ class CachingInstructionsLoader:
         """ returns a list of builder that will be run multiple times. """
         duplicate_series_of_builders = []
         for model in permutation:
+            if self._is_do_not_cache(model.builder):
+                return duplicate_series_of_builders
+
             if False is self._previous_builders_unique(model):
                 duplicate_series_of_builders.append(model)
 
@@ -290,39 +297,61 @@ class CachingInstructionsLoader:
         normal_behaviour = InstructionSet(Instruction(Instruction.NO_CACHE, always))
         model.builder_instructions = normal_behaviour
 
+    def _is_do_not_cache(self, builder: Builder) -> bool:
+        for blacklisted_class in self.BLACK_LIST:
+            if isinstance(builder, blacklisted_class):
+                return True
+
+        return False
+
 
 class AIFactory:
-    builder_permutations: List[List[Builder]]
+    _builder_permutations: List[List[Builder]]
 
-    def __init__(self, builders: List[Builder], project_name: str, log_dir: str):
+    def __init__(self, builders: List[Builder], project_name: str, log_dir: str, dispatcher: Dispatcher):
         self.console_printer = FactoryPrinter(ConsolePrintStrategy())
         self.sorter = BuilderSorter()
         self.project_name = project_name
         self.log_dir = log_dir
+        self.dispatcher = dispatcher
         self.permutation_generator = PermutationGenerator()
-        self.builder_permutations = self.permutation_generator.generate(builders=builders)
-        self.builder_permutations = self.sorter.sort_permutations(self.builder_permutations)
         self.caching_instruction_loader = CachingInstructionsLoader(manager=smart_cache_manager)
-        self.caching_instruction_loader.set_caching_instructions(self.builder_permutations)
+
+        self._add_observers()
+        self._builder_permutations = self.load_permutations(builders)
+        self.caching_instruction_loader.set_caching_instructions(self._builder_permutations)
+
+    def load_permutations(self, builders):
+        builder_permutations = self.permutation_generator.generate(builders=builders)
+        return self.sorter.sort_permutations(builder_permutations)
+
+    def _add_observers(self):
+        self.dispatcher.addObserver(PreBuilderObserver())
 
     def count_remaining_models(self):
-        return len(self.builder_permutations)
+        return len(self._builder_permutations)
 
     def has_next_ai(self):
         return self.count_remaining_models() is not 0
 
     def create_next_ai(self):
-        next_builder_permutation = self.builder_permutations.pop()
+        next_builder_permutation = self._builder_permutations.pop()
 
         return self.create_AI(next_builder_permutation)
 
     def create_AI(self, builders: list, ai_name: str = None) -> AbstractAI:
         self.validate_builders(builders)
         ml_model = AI(self.project_name, self.log_dir, ai_name)
+        self.dispatcher.dispatch(ModelEvent(KernelDispatcher.PRE_RUN_BUILDERS, ml_model))
+        name = ml_model.get_name()
 
         description = {}
         for builder in builders:
             self.console_printer.line('running: ' + builder.__class__.__name__)
+            if isinstance(builder, EstimatorBuilder):
+                # overwrite old nam from being loaded from cache.
+                ml_model.set_name(name)
+
             ml_model = builder.build(ml_model)
 
             builder_description = builder.describe()

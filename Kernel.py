@@ -35,31 +35,14 @@ class Kernel:
         self.evaluate = evaluate
         self.predict = predict
 
-        self.dispatcher = KernelDispatcher()
-        self.dispatcher.addObserver(PreRunObserver())
-        self.dispatcher.addObserver(ModelNotUniqueObserver())
-        self.dispatcher.addObserver(PreCreateObserver())
-
-        if self.train:
-            self.dispatcher.addObserver(PreTrainObserver())
-            self.dispatcher.addObserver(PostTrainObserver())
-
-        if self.evaluate:
-            self.dispatcher.addObserver(PreEvaluationObserver())
-            self.dispatcher.addObserver(PostEvaluationObserver())
-
-        self.dispatcher.addObserver(PostRunObserver())
-
-        if True is not self.no_log and self.evaluate:
-            self.dispatcher.addObserver(PreRunLoadMetaLogger())
-            self.dispatcher.addObserver(PreRunLoadSummaryLogger())
-            self.dispatcher.addObserver(PostEvaluationLogObserver())
+        self._load_dispatcher()
 
         # self.dispatcher.dispatch(KernelDispatcher.PRE_BOOT) pre-boot hook
         self.factory = AIFactory(
             builders=Builder.get_all_registered(),
             project_name=self.session.project_name,
-            log_dir=self.session.log_dir)
+            log_dir=self.session.log_dir,
+            dispatcher=self.dispatcher)
         summizer = TimeSummizer()
 
         feature_importance = GainBasedFeatureImportance()
@@ -71,6 +54,23 @@ class Kernel:
             self.predictor = Predictor(categories=self.session.session_data['prediction']['categories'])
 
         # self.dispatcher.dispatch(KernelDispatcher.POST_BOOT) post-boot hook
+
+    def _load_dispatcher(self):
+        self.dispatcher = KernelDispatcher()
+        self.dispatcher.addObserver(PreRunObserver())
+        self.dispatcher.addObserver(ModelNotUniqueObserver())
+        self.dispatcher.addObserver(PreCreateObserver())
+        if self.train:
+            self.dispatcher.addObserver(PreTrainObserver())
+            self.dispatcher.addObserver(PostTrainObserver())
+        if self.evaluate:
+            self.dispatcher.addObserver(PreEvaluationObserver())
+            self.dispatcher.addObserver(PostEvaluationObserver())
+        self.dispatcher.addObserver(PostRunObserver())
+        if True is not self.no_log and self.evaluate:
+            self.dispatcher.addObserver(PreRunLoadMetaLogger())
+            self.dispatcher.addObserver(PreRunLoadSummaryLogger())
+            self.dispatcher.addObserver(PostEvaluationLogObserver())
 
     def run(self):
         self.model = None

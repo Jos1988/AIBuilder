@@ -3,10 +3,12 @@ from pathlib import Path
 from typing import List
 
 from AIBuilder import AITester
-from AIBuilder.AIFactory import AIFactory
+from AIBuilder.AI import AI
 from AIBuilder.AIFactory.Logging import CSVReader, MetaLogger, SummaryLogger
+from AIBuilder.AIFactory.Logistics import ModelNameDeterminator
 from AIBuilder.AIFactory.Printing import TesterPrinter, ConsolePrintStrategy, ReportPrintStrategy, \
     FactoryPrinter
+
 
 class Session:
 
@@ -84,8 +86,10 @@ class KernelDispatcher(Dispatcher):
 
     MODEL_NOT_UNIQUE = 'MODEL_NOT_UNIQUE'
 
+    PRE_RUN_BUILDERS = 'PRE_RUN_BUILDERS'
+
     ALL_EVENTS = [PRE_BOOT, POST_BOOT, PRE_RUN, POST_RUN, PRE_CREATE, POST_CREATE, PRE_TRAIN, POST_TRAIN, PRE_EVALUATE,
-                  POST_EVALUATE, MODEL_NOT_UNIQUE]
+                  POST_EVALUATE, MODEL_NOT_UNIQUE, PRE_RUN_BUILDERS]
 
     def dispatch(self, event: Event):
         assert self.validateEvent(event=event.name), '{} is not registered as a valid event.'.format(event.name)
@@ -112,10 +116,21 @@ class TesterEvent(Event):
 
 class FactoryEvent(Event):
 
-    def __init__(self, event_name: str, session: Session, factory: AIFactory):
+    def __init__(self, event_name: str, session: Session, factory):
         self.session = session
         self.event_name = event_name
         self.factory = factory
+
+    @property
+    def name(self) -> str:
+        return self.event_name
+
+
+class ModelEvent(Event):
+
+    def __init__(self, event_name: str, ml_model: AI):
+        self.event_name = event_name
+        self.ml_model = ml_model
 
     @property
     def name(self) -> str:
@@ -179,7 +194,8 @@ class PreRunLogObserver(Observer):
         )
 
         if False is reader.check_compatible(log_file_path):
-            raise AssertionError('Meta log file not compatible, expecting following headers: {}'.format(reader.all_names))
+            raise AssertionError(
+                'Meta log file not compatible, expecting following headers: {}'.format(reader.all_names))
 
     def get_path(self, event: Event, file_name: str) -> str:
         return event.session.log_dir + '/' + file_name
@@ -371,3 +387,18 @@ class PostEvaluationLogObserver(Observer):
 
     def update_summary(self, event):
         event.session.summary_logger.add_ml_model(event.tester.ml_model)
+
+
+class PreBuilderObserver(Observer):
+
+    def __init__(self):
+        self.name_determinator = ModelNameDeterminator()
+
+    @property
+    def observed_event_names(self) -> List[str]:
+        return [KernelDispatcher.PRE_RUN_BUILDERS]
+
+    def execute(self, event: ModelEvent):
+        assert isinstance(event, ModelEvent), f'{ModelEvent.__name__} required for {__class__.__name__}, got ' \
+                                              f'{event.__class__.__name__}'
+        self.name_determinator.determine(event.ml_model)
