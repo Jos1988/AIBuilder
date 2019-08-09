@@ -348,6 +348,13 @@ class TestBlacklistCatScrubber(unittest.TestCase):
         self.assertNotIn('bird', categories)
         self.assertNotIn('dog', categories)
 
+    def testScrub3(self):
+        scrubber = BlacklistCatScrubber(column_name='categorical', blacklist=['python'])
+        result = scrubber.scrub(self.data_model)
+        df = result.get_dataframe()
+        categories = df['categorical'].values.tolist()
+        self.assertEqual(12, len(df))
+
 
 class TestBlacklistTokenScrubber(unittest.TestCase):
 

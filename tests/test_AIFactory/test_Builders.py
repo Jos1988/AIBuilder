@@ -370,8 +370,8 @@ class TestDataSplitterBuilder(unittest.TestCase):
 
 class TestFeatureColumnBuilder(unittest.TestCase):
 
-    def test_build(self):
-        builder = FeatureColumnBuilder(
+    def setUp(self) -> None:
+        self.builder = FeatureColumnBuilder(
             feature_columns={
                 'col1': FeatureColumnStrategy.CATEGORICAL_COLUMN_VOC_LIST,
                 'col3': FeatureColumnStrategy.NUMERICAL_COLUMN,
@@ -381,7 +381,7 @@ class TestFeatureColumnBuilder(unittest.TestCase):
             feature_config={'col5': {'buckets': 2}}
         )
 
-        arti = mock.Mock('AIBuilder.AbstractAI')
+        self.arti = mock.Mock('AIBuilder.AbstractAI')
 
         # mock training model
         data = {'col3': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
@@ -403,26 +403,52 @@ class TestFeatureColumnBuilder(unittest.TestCase):
                 'col5': [1, 2, 3, 4, 1, 2, 3, 4, 3, 4]}
 
         dataframe = pd.DataFrame(data=data)
-        training_model = DataModel(dataframe)
-        training_model.get_target_column = mock.Mock()
-        training_model.get_target_column.return_value = 'col2'
+        self.training_model = DataModel(dataframe)
+        self.training_model.get_target_column = mock.Mock()
+        self.training_model.get_target_column.return_value = 'col2'
 
-        arti.get_training_data = mock.Mock()
-        arti.get_training_data.return_value = training_model
-        arti.set_training_data = mock.Mock()
+        self.arti.get_training_data = mock.Mock()
+        self.arti.get_training_data.return_value = self.training_model
+        self.arti.set_training_data = mock.Mock()
 
-        arti.get_evaluation_data = mock.Mock()
-        arti.get_evaluation_data.return_value = None
+        self.arti.get_evaluation_data = mock.Mock()
+        self.arti.get_evaluation_data.return_value = None
 
-        builder.build(arti)
+        self.arti.get_prediction_data = mock.Mock()
+        self.arti.get_prediction_data.return_value = None
 
-        feature_columns = training_model.get_tf_feature_columns()
-        col1_cat_column = feature_columns[3]
-        col3_num_column = feature_columns[2]
-        col4_indicator_column = feature_columns[1]
-        col5_bucketized_col = feature_columns[0]
+    def test_build(self):
+        self.builder.build(self.arti)
 
-        arti.set_training_data.assert_called_once()
+        feature_columns = self.training_model.get_tf_feature_columns()
+
+        col1_cat_column = feature_columns[0]
+        col3_num_column = feature_columns[1]
+        col4_indicator_column = feature_columns[2]
+        col5_bucketized_col = feature_columns[3]
+
+        self.arti.set_training_data.assert_called_once()
+
+        self.assertCountEqual(col1_cat_column.vocabulary_list, {'cat_one', 'cat_two'})
+        self.assertEqual(col1_cat_column.name, 'col1')
+
+        self.assertEqual(col3_num_column.name, 'col3')
+        self.assertEqual(col3_num_column.dtype, tf.float32)
+
+        self.assertEqual(col4_indicator_column.name, 'col4_indicator')
+        self.assertEqual(col5_bucketized_col.name, 'col5_bucketized')
+
+    def test_build_already_build_model(self):
+        self.builder.build(self.arti)
+        self.builder.build(self.arti)
+
+        feature_columns = self.training_model.get_tf_feature_columns()
+        col1_cat_column = feature_columns[0]
+        col3_num_column = feature_columns[1]
+        col4_indicator_column = feature_columns[2]
+        col5_bucketized_col = feature_columns[3]
+
+        self.arti.set_training_data.assert_called()
 
         self.assertCountEqual(col1_cat_column.vocabulary_list, {'cat_one', 'cat_two'})
         self.assertEqual(col1_cat_column.name, 'col1')

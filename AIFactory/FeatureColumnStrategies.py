@@ -17,7 +17,8 @@ class FeatureColumnStrategy(ABC):
     BUCKETIZED_COLUMN = 'bucketized_column'
     CROSSED_COLUMN = 'crossed_column'
 
-    ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,INDICATOR_COLUMN_VOC_LIST,
+    ALL_COLUMNS = [CATEGORICAL_COLUMN_IDENTITY, CATEGORICAL_COLUMN_VOC_LIST, NUMERICAL_COLUMN,
+                   INDICATOR_COLUMN_VOC_LIST,
                    MULTIPLE_HOT_COLUMNS, BUCKETIZED_COLUMN, CROSSED_COLUMN, VECTOR_COLUMNS]
 
     """ Results of building process will be stored in this attribute. """
@@ -83,7 +84,9 @@ class NumericColumnStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == 'NumericColumn', 'Result is wrong class "{}"'.format(result.__class__.__name__)
+            assert result.__class__.__name__ in ['NumericColumn',
+                                                 '_NumericColumn'], 'Result is wrong class "{}"'.format(
+                result.__class__.__name__)
 
     @staticmethod
     def column_types() -> list:
@@ -105,7 +108,8 @@ class CategoricalColumnWithVOCListStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == 'VocabularyListCategoricalColumn',  'Result is wrong class "{}"'\
+            assert result.__class__.__name__ in ['_VocabularyListCategoricalColumn',
+                                                 'VocabularyListCategoricalColumn'], 'Result is wrong class "{}"' \
                 .format(result.__class__.__name__)
 
     @staticmethod
@@ -153,7 +157,7 @@ class IndicatorColumnWithVOCListStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == 'IndicatorColumn', \
+            assert result.__class__.__name__ in ['IndicatorColumn', '_IndicatorColumn'], \
                 'Result is wrong class "{}"'.format(result.__class__.__name__)
 
     @staticmethod
@@ -214,7 +218,6 @@ class VectorColumnsStrategy(FeatureColumnStrategy):
     NAME_CONFIG_KEY = 'col_name'
 
     def build_column(self):
-
         df = self.data_model.get_dataframe()
         all_columns = df.columns
 
@@ -263,7 +266,7 @@ class BucketizedColumnStrategy(FeatureColumnStrategy):
 
     def validate_result(self):
         for result in self.results:
-            assert result.__class__.__name__ == 'BucketizedColumn', \
+            assert result.__class__.__name__ in ['BucketizedColumn', '_BucketizedColumn'], \
                 'Result is wrong class "{}"'.format(result.__class__.__name__)
 
     @staticmethod
@@ -288,7 +291,7 @@ class CrossedColumnStrategy(FeatureColumnStrategy):
                 if name in column.name:
                     columns_to_cross.append(column)
 
-        assert 2 is len(columns_to_cross), 'Two columns must be crossed found {}, looked for "{}" in "{}"'\
+        assert 2 is len(columns_to_cross), 'Two columns must be crossed found {}, looked for "{}" in "{}"' \
             .format(len(columns_to_cross), column_names, current_columns)
 
         crossed_tf_column = tf.feature_column.crossed_column(columns_to_cross, num_buckets)

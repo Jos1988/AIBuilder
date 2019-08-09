@@ -467,7 +467,7 @@ class BlacklistCatScrubber(Scrubber):
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
         df = df.set_index(self.column_name())
-        df = df.drop(self.blacklist(), axis=0)
+        df = df.drop(self.blacklist(), axis=0, errors='ignore')
         df = df.reset_index()
         data_model.set_dataframe(df)
 
