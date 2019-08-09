@@ -714,6 +714,7 @@ class FeatureColumnBuilder(Builder):
             .format(target_column)
 
     def render_tf_feature_columns(self, data_model: DataModel):
+        data_model.set_tf_feature_columns([])
         for feature_column_info in self.feature_columns():
             column_strategy = FeatureColumnStrategyFactory.get_strategy(feature_column_info['name'],
                                                                         feature_column_info['type'],
