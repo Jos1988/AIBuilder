@@ -27,7 +27,7 @@ class TestBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, neural_net: AbstractAI):
+    def build(self, ml_model: AbstractAI):
         pass
 
 
@@ -63,7 +63,7 @@ class TestDataBuilder(unittest.TestCase):
 
         arti = AI(project_name='name', log_dir='path/to/dir')
         data_builder.validate()
-        data_builder.build(ai=arti)
+        data_builder.build(ml_model=arti)
 
         column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
         self.validate_data_frame(arti.training_data, column_names)
@@ -76,7 +76,7 @@ class TestDataBuilder(unittest.TestCase):
 
         arti = AI(project_name='name', log_dir='path/to/dir')
         data_builder.validate()
-        data_builder.build(ai=arti)
+        data_builder.build(ml_model=arti)
 
         column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
         self.validate_data_frame(arti.training_data, column_names)
@@ -89,7 +89,7 @@ class TestDataBuilder(unittest.TestCase):
 
         arti = AI(project_name='name', log_dir='path/to/dir')
         data_builder.validate()
-        data_builder.build(ai=arti)
+        data_builder.build(ml_model=arti)
 
         column_names = ['feature_1', 'feature_2', 'feature_3', 'target_1']
         self.validate_data_frame(arti.training_data, column_names)
@@ -212,17 +212,31 @@ class TestNamingScheme(unittest.TestCase):
 
     @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
     def test_generate_name(self, walk):
-        walk.return_value = iter([[None, ['shoesies', 'shoes_1', 'shoes_2']]])
+        walk.return_value = iter([[None, ['shoes_1', 'shoes_2']]])
         self.arti.get_project_name.return_value = 'shoes'
         self.naming_scheme.build(self.arti)
         self.arti.set_name.assert_called_once_with('shoes_3')
 
     @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
-    def test_numerate_name(self, walk):
+    def test_generate_name_no_version(self, walk):
         walk.return_value = iter([[None, ['shoesies', 'shoes_1', 'shoes_2']]])
-        self.arti.get_project_name.return_value = 'shoesies'
+        self.arti.get_project_name.return_value = 'shoes'
+        with self.assertRaises(RuntimeError, msg='could not resolve version of model name "shoesies"'):
+            self.naming_scheme.build(self.arti)
+
+    @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
+    def test_numerate_name(self, walk):
+        walk.return_value = iter([[None, ['shoes_1', 'shoes_2']]])
+        self.arti.get_project_name.return_value = 'shoes'
         self.naming_scheme.build(self.arti)
-        self.arti.set_name.assert_called_once_with('shoesies_1')
+        self.arti.set_name.assert_called_once_with('shoes_3')
+
+    @mock.patch('AIBuilder.AIFactory.Builders.os.walk')
+    def test_extra_underscore(self, walk):
+        walk.return_value = iter([[None, ['my_shoes_1', 'my_shoes_2']]])
+        self.arti.get_project_name.return_value = 'my_shoes'
+        self.naming_scheme.build(self.arti)
+        self.arti.set_name.assert_called_once_with('my_shoes_3')
 
 
 class TestOptimizerBuilder(unittest.TestCase):

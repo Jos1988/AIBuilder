@@ -1306,3 +1306,171 @@ class BinaryResampler(Scrubber):
         scrubbed_df = scrubbed_df.reset_index(drop=True)
 
         return scrubbed_df
+
+
+class DataRowMerger(Scrubber):
+    """ Merges rows with different values of a given attribute in order to cancel out the effects of this attribute. """
+    #TODO: refactor to be easier to understand, use multiple classes.
+    #TODO: fine tune algorithm
+    #TODO: implement verbosity
+
+    def __init__(self, group_by: str, spread_by: str, group_size: int):
+        self.group_by = DataTypeSpecification('group_by', group_by, str)
+        self.spread_by = DataTypeSpecification('spread_by', spread_by, str)
+        self.group_size = DataTypeSpecification('group_size', group_size, int)
+        self._stacks = []
+
+    @property
+    def scrubber_config_list(self):
+        return {self.group_by(): MetaData.CATEGORICAL_DATA_TYPE, self.spread_by(): MetaData.CATEGORICAL_DATA_TYPE}
+
+    def validate(self, data_model: DataModel):
+        pass
+
+    def update_metadata(self, meta_data: MetaData):
+        pass
+
+    def scrub(self, data_model: DataModel) -> DataModel:
+        df = data_model.get_dataframe()
+        rows_to_merge = []
+
+        for group_by_value in df[self.group_by()].unique():
+            df_group = df.loc[df[self.group_by()] == group_by_value]
+
+            self._create_stacks(df_group)
+            progress = tqdm(total=self._calculate_total_stack_size())
+
+            while not self._stacks_depleted():
+                new_group = self._load_group()
+                if 0 == len(new_group):
+                    continue
+
+                progress.update(len(new_group))
+                rows_to_merge.append(new_group)
+
+            progress.close()
+            self._stacks = []
+        data_cols = list(df.columns)
+        new_df = self._load_new_data(rows_to_merge, data_cols)
+        data_model.set_dataframe(new_df)
+
+        return data_model
+
+    def _load_new_data(self, groups, columns: List[str]):
+        new_data = self._create_new_data_dict(columns)
+
+        for group in groups:
+            self._merge_group_into_item(group, new_data)
+
+        new_df = pd.DataFrame(new_data)
+        return new_df
+
+    def _merge_group_into_item(self, group, new_data):
+        for column in new_data.keys():
+            summed_value = ''
+            for item in group:
+                if 0 == len(item):
+                    continue
+
+                # dirty temp fix for handling empty data.
+                item2 = list(item[column])
+                if len(item2) == 0:
+                    raise Exception('empty item.')
+
+                value = item2[0]
+                summed_value = self.merge_data(summed_value, value)
+                if column is self.group_by():
+                    summed_value = value
+
+            new_data[column].append(summed_value)
+
+    def merge_data(self, summed_value, value):
+
+        if type(value) == str:
+            summed_value = str(summed_value) + value
+        elif type(value) == list:
+            summed_value = list(summed_value) + value
+
+        return summed_value
+
+    def _create_new_data_dict(self, columns):
+        new_data = {}
+        for col in columns:
+            new_data[col] = []
+        return new_data
+
+    def _create_stacks(self, df: pd.DataFrame):
+        """Divide dataframe into stacks of items with similar spread_by value."""
+
+        assert len(self._stacks) is 0, 'Stacks have already been created.'
+
+        for value in df[self.spread_by()].unique():
+            items = df.loc[df[self.spread_by()] == value]
+            self._stacks.append([value, items])
+
+    def _load_group(self) -> list:
+        value_ratios = self._calculate_stack_ratios()
+        group = []
+
+        # Load group by ratio.
+        for value, ratio in value_ratios.items():
+            required_stack_items = int(ratio * self.group_size())
+            if required_stack_items is 0:
+                continue
+
+            for _ in range(required_stack_items):
+                group.append(self.pop_from_stack(value))
+                if self.group_size() == len(group):
+                    return group
+
+        while not self._stacks_depleted():
+            self._sort_stacks()
+
+            group.append(self._pop_from_largest_stack())
+            if self.group_size() == len(group):
+                return group
+
+        return group
+
+    def pop_from_stack(self, value_requested: str):
+        i = 0
+        for value, stack in self._stacks:
+            if value_requested == value:
+                item = stack[-1:]
+                self._stacks[i][1] = stack[:-1]
+
+                return item
+
+            i += 1
+
+        raise IndexError(f'Requesting value from non existing stack: "{value_requested}".')
+
+    def _pop_from_largest_stack(self):
+        self._sort_stacks()
+        return self.pop_from_stack(self._stacks[0][0])
+
+    def _stacks_depleted(self) -> bool:
+        for value, stack in self._stacks:
+            if len(stack) is not 0:
+                return False
+
+        return True
+
+    def _calculate_stack_ratios(self):
+        total_data_len = self._calculate_total_stack_size()
+
+        value_ratios = {}
+        for value, item_stack in self._stacks:
+            value_ratios[value] = len(item_stack) / total_data_len
+
+        return value_ratios
+
+    def _calculate_total_stack_size(self):
+        total_data_len = 0
+        for value, stack in self._stacks:
+            total_data_len += len(stack)
+
+        return total_data_len
+
+    def _sort_stacks(self):
+        sorted(self._stacks, key=lambda x: len(x[1]))

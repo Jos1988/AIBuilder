@@ -6,6 +6,7 @@ from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategyFactory, Es
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategyFactory, FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategyFactory, OptimizerStrategy
 from AIBuilder.AIFactory.Specifications import ConfigDescriber, PrefixedDictSpecification, Describer
+from AIBuilder.AIFactory.smartCache.SmartCache import smart_cache
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
@@ -54,7 +55,8 @@ class Builder(ABC, Describer):
         return cls.builder_registry
 
     @abstractmethod
-    def build(self, neural_net: AbstractAI):
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        """ ML_model is changed by the builder, we also return te result for the sake of caching. """
         pass
 
 
@@ -97,18 +99,21 @@ class DataBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, ai: AbstractAI):
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
         if self.data_source() is not None:
             data = self.load_data(self.data_source())
-            ai.set_training_data(data)
+            ml_model.set_training_data(data)
 
         if self.eval_data_source() is not None:
             validation_data = self.load_data(self.eval_data_source())
-            ai.set_evaluation_data(validation_data)
+            ml_model.set_evaluation_data(validation_data)
 
         if self.prediction_data_source() is not None:
             prediction_data = self.load_data(self.prediction_data_source())
-            ai.set_prediction_data(prediction_data)
+            ml_model.set_prediction_data(prediction_data)
+
+        return ml_model
 
     def load_data(self, data_source: str) -> DataModel:
         loader = self.load_file(data_source)
@@ -182,20 +187,23 @@ class NullDataSplitterBuilder(DataSplitterBuilder):
     def builder_type(self) -> str:
         return self.DATA_SPLITTER
 
-    def build(self, neural_net: AbstractAI):
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
         if not self.randomize():
-            return
+            return ml_model
 
-        train_data = neural_net.get_training_data()
+        train_data = ml_model.get_training_data()
         self.randomize_data(train_data, self.seed())
-        neural_net.set_training_data(training_data=train_data)
+        ml_model.set_training_data(training_data=train_data)
 
-        eval_data = neural_net.get_evaluation_data()
+        eval_data = ml_model.get_evaluation_data()
         if eval_data is None:
-            return
+            return ml_model
 
         self.randomize_data(eval_data, self.seed())
-        neural_net.set_evaluation_data(eval_data)
+        ml_model.set_evaluation_data(eval_data)
+
+        return ml_model
 
 
 class EvalDataSplitterBuilder(DataSplitterBuilder):
@@ -245,7 +253,8 @@ class EvalDataSplitterBuilder(DataSplitterBuilder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, ml_model: AbstractAI):
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
         data = self.select_data(ml_model)
         if self.randomize():
             self.randomize_data(data, self.seed())
@@ -255,6 +264,8 @@ class EvalDataSplitterBuilder(DataSplitterBuilder):
 
         ml_model.set_training_data(split_data[0])
         ml_model.set_evaluation_data(split_data[1])
+
+        return ml_model
 
     def select_data(self, neural_net: AbstractAI) -> DataModel:
         if self.data_source() == self.TRAINING_DATA:
@@ -313,8 +324,9 @@ class EstimatorBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, neural_net: AbstractAI):
-        strategy: EstimatorStrategy = EstimatorStrategyFactory.get_strategy(neural_net,
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        strategy: EstimatorStrategy = EstimatorStrategyFactory.get_strategy(ml_model,
                                                                             self.estimator_type(),
                                                                             self.kwargs())
 
@@ -322,9 +334,9 @@ class EstimatorBuilder(Builder):
             .format(self.estimator_type())
 
         self.estimator = strategy.build()
-        neural_net.set_estimator(self.estimator)
+        ml_model.set_estimator(self.estimator)
 
-        return
+        return ml_model
 
 
 class InputFunctionBuilder(Builder):
@@ -411,7 +423,8 @@ class InputFunctionBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, ml_model: AbstractAI):
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
         if self.build_train:
             train_function = self.assign_fn(ml_model.training_data, self.train_fn_name(), self.train_kwargs)
             ml_model.set_training_fn(train_function)
@@ -425,6 +438,8 @@ class InputFunctionBuilder(Builder):
             prediction_function = self.assign_prediction_fn(ml_model.prediction_data, self.prediction_fn_name(),
                                                             self.prediction_kwargs)
             ml_model.set_prediction_fn(prediction_function)
+
+        return ml_model
 
 
 class NamingSchemeBuilder(Builder):
@@ -446,20 +461,21 @@ class NamingSchemeBuilder(Builder):
     def validate(self):
         pass
 
-    def build(self, neural_net: AbstractAI):
-        self.AI = neural_net
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        self.AI = ml_model
         self.existing_names = self.get_logged_names()
 
         if self.AI.get_name() is None or self.AI.get_name() is self.AI.get_project_name():
             self.generate_name()
-            return
+            return ml_model
 
         if self.AI.get_name() in self.existing_names:
             self.AI.set_name(self.AI.get_name() + '_1')
-            return
+            return ml_model
 
         if self.AI.get_name() is not None:
-            return
+            return ml_model
 
         raise RuntimeError('Naming scheme failed to set name.')
 
@@ -526,8 +542,9 @@ class OptimizerBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, neural_net: AbstractAI):
-        strategy: OptimizerStrategy = OptimizerStrategyFactory.get_strategy(neural_net,
+    @smart_cache
+    def build(self, ml_model: AbstractAI):
+        strategy: OptimizerStrategy = OptimizerStrategyFactory.get_strategy(ml_model,
                                                                             self.optimizer_type(),
                                                                             self.learning_rate(),
                                                                             self.gradient_clipping(),
@@ -537,9 +554,9 @@ class OptimizerBuilder(Builder):
             .format(self.optimizer_type())
 
         optimizer = strategy.build()
-        neural_net.set_optimizer(optimizer)
+        ml_model.set_optimizer(optimizer)
 
-        return
+        return ml_model
 
 
 class ScrubAdapter(Builder):
@@ -598,10 +615,11 @@ class ScrubAdapter(Builder):
     def validate(self):
         pass
 
-    def build(self, neural_net: AbstractAI):
-        training_data = neural_net.training_data
-        validation_data = neural_net.evaluation_data
-        prediction_data = neural_net.get_prediction_data()
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        training_data = ml_model.training_data
+        validation_data = ml_model.evaluation_data
+        prediction_data = ml_model.get_prediction_data()
 
         if training_data is not None:
             self.and_scrubber_training.validate_metadata(deepcopy(training_data.metadata))
@@ -614,6 +632,8 @@ class ScrubAdapter(Builder):
         if prediction_data is not None:
             self.and_scrubber_prediction.validate_metadata(deepcopy(prediction_data.metadata))
             self.and_scrubber_prediction.scrub(prediction_data)
+
+        return ml_model
 
 
 class MetadataBuilder(Builder):
@@ -633,19 +653,22 @@ class MetadataBuilder(Builder):
     def validate(self):
         pass
 
-    def build(self, neural_net: AbstractAI):
-        training_data_model: Optional[DataModel] = neural_net.get_training_data()
-        evaluation_data_model: Optional[DataModel] = neural_net.get_evaluation_data()
-        prediction_data_model: Optional[DataModel] = neural_net.get_prediction_data()
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        training_data_model: Optional[DataModel] = ml_model.get_training_data()
+        evaluation_data_model: Optional[DataModel] = ml_model.get_evaluation_data()
+        prediction_data_model: Optional[DataModel] = ml_model.get_prediction_data()
 
         if None is not training_data_model:
-            neural_net.set_training_data(self.build_meta_data(training_data_model))
+            ml_model.set_training_data(self.build_meta_data(training_data_model))
 
         if None is not evaluation_data_model:
-            neural_net.set_evaluation_data(self.build_meta_data(evaluation_data_model))
+            ml_model.set_evaluation_data(self.build_meta_data(evaluation_data_model))
 
         if None is not prediction_data_model:
-            neural_net.set_prediction_data(self.build_meta_data(prediction_data_model))
+            ml_model.set_prediction_data(self.build_meta_data(prediction_data_model))
+
+        return ml_model
 
     def build_meta_data(self, data_model):
         df = data_model.get_dataframe()
@@ -681,7 +704,6 @@ class MetadataBuilder(Builder):
 
 
 class FeatureColumnBuilder(Builder):
-
     MULTIPLE_COLUMNS_FEATURE = [
         FeatureColumnStrategy.INDICATOR_COLUMN_VOC_LIST,
         FeatureColumnStrategy.VECTOR_COLUMNS
@@ -715,22 +737,25 @@ class FeatureColumnBuilder(Builder):
     def validate(self):
         self.validate_specifications()
 
-    def build(self, ai: AbstractAI):
-        training_data: Optional[DataModel] = ai.get_training_data()
-        evaluation_data: Optional[DataModel] = ai.get_evaluation_data()
-        prediction_data: Optional[DataModel] = ai.get_prediction_data()
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        training_data: Optional[DataModel] = ml_model.get_training_data()
+        evaluation_data: Optional[DataModel] = ml_model.get_evaluation_data()
+        prediction_data: Optional[DataModel] = ml_model.get_prediction_data()
 
         if training_data is not None:
             self.build_feature_columns(training_data)
-            ai.set_training_data(training_data)
+            ml_model.set_training_data(training_data)
 
         if evaluation_data is not None:
             self.build_feature_columns(evaluation_data)
-            ai.set_evaluation_data(evaluation_data)
+            ml_model.set_evaluation_data(evaluation_data)
 
         if prediction_data is not None:
             self.build_feature_columns(prediction_data)
-            ai.set_evaluation_data(prediction_data)
+            ml_model.set_evaluation_data(prediction_data)
+
+        return ml_model
 
     def build_feature_columns(self, data_model):
         self.validate_target_not_in_features(data_model)
