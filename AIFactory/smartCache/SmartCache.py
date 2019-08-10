@@ -208,7 +208,8 @@ class SmartCacheManager:
 
     def load_from_cache(self, obj: object, method: str):
         call = MethodCall.create(obj, method)
-        return self.cache[str(call.obj_hash) + method]
+        cached_data = self.cache[str(call.obj_hash) + method]
+        return deepcopy(cached_data)
 
 
 smart_cache_manager = SmartCacheManager(instruction_repo=InstructionsRepository(), call_log=CallCountLog(), verbosity=1)
