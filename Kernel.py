@@ -30,7 +30,7 @@ class Kernel:
         if 'no_log' in kwargs:
             self.no_log = kwargs['no_log']
 
-    def boot(self, train: bool = True, evaluate: bool = True, predict: bool = False):
+    def boot(self, train: bool = True, evaluate: bool = True, predict: bool = False, cache=True):
         self.train = train
         self.evaluate = evaluate
         self.predict = predict
@@ -42,7 +42,9 @@ class Kernel:
             builders=Builder.get_all_registered(),
             project_name=self.session.project_name,
             log_dir=self.session.log_dir,
-            dispatcher=self.dispatcher)
+            dispatcher=self.dispatcher,
+            cache=cache
+        )
         summizer = TimeSummizer()
 
         feature_importance = GainBasedFeatureImportance()

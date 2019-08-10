@@ -308,7 +308,8 @@ class CachingInstructionsLoader:
 class AIFactory:
     _builder_permutations: List[List[Builder]]
 
-    def __init__(self, builders: List[Builder], project_name: str, log_dir: str, dispatcher: Dispatcher):
+    def __init__(self, builders: List[Builder], project_name: str, log_dir: str, dispatcher: Dispatcher,
+                 cache: bool = True):
         self.console_printer = FactoryPrinter(ConsolePrintStrategy())
         self.sorter = BuilderSorter()
         self.project_name = project_name
@@ -319,7 +320,8 @@ class AIFactory:
 
         self._add_observers()
         self._builder_permutations = self.load_permutations(builders)
-        self.caching_instruction_loader.set_caching_instructions(self._builder_permutations)
+        if cache:
+            self.caching_instruction_loader.set_caching_instructions(self._builder_permutations)
 
     def load_permutations(self, builders):
         builder_permutations = self.permutation_generator.generate(builders=builders)
@@ -349,7 +351,7 @@ class AIFactory:
         for builder in builders:
             self.console_printer.line('running: ' + builder.__class__.__name__)
             if isinstance(builder, EstimatorBuilder):
-                # overwrite old nam from being loaded from cache.
+                # overwrite old name from being loaded from cache.
                 ml_model.set_name(name)
 
             ml_model = builder.build(ml_model)
