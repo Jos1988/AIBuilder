@@ -227,12 +227,13 @@ class CachingInstructionsLoader:
                 builderInstructionModel.prev_builders = prev_builders
 
     def map_instructions_to_models(self, models: List[List[BuilderInstructionModel]]):
-        """ load instructions for caching and stores them by builder models. """
+        """ Load instructions for caching and stores them by builder models. """
         self._load_all_previous_builders(models)
         self._handle_duplicate_series(models)
         self._handle_remaining_models(models)
 
     def _handle_duplicate_series(self, models):
+        """ Finds al series of builder that occur than once and instructs caching behavior. """
         for permutation in models:
             duplicate_series_of_builders = self._get_duplicate_series_of_builders(permutation)
             if len(duplicate_series_of_builders) > 0:

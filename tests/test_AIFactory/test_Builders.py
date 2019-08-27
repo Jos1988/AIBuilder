@@ -1,6 +1,6 @@
 from unittest import mock
 from AIBuilder.AI import AI, AbstractAI
-from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy, EstimatorStrategyFactory
+from AIBuilder.AIFactory.EstimatorStrategies import EstimatorStrategy
 from AIBuilder.AIFactory.FeatureColumnStrategies import FeatureColumnStrategy
 from AIBuilder.AIFactory.OptimizerStrategies import OptimizerStrategy
 from AIBuilder.Data import DataModel
@@ -11,7 +11,7 @@ import pandas as pd
 from AIBuilder.AIFactory.Builders import Builder
 import AIBuilder.DataScrubbing as scrubber
 from AIBuilder.AIFactory.Builders import DataBuilder, EstimatorBuilder, InputFunctionBuilder, OptimizerBuilder, \
-    ScrubAdapter, MetadataBuilder, EvalDataSplitterBuilder, FeatureColumnBuilder
+    ScrubAdapter, MetadataBuilder, RandomDataSplitter, FeatureColumnBuilder, CategoricalDataSplitter
 
 
 class TestBuilder(Builder):
@@ -333,7 +333,7 @@ class TestMetadataBuilder(unittest.TestCase):
 class TestDataSplitterBuilder(unittest.TestCase):
 
     def test_build(self):
-        builder = EvalDataSplitterBuilder(evaluation_data_perc=20, data_source=EvalDataSplitterBuilder.TRAINING_DATA)
+        builder = RandomDataSplitter(evaluation_data_perc=20, data_source=RandomDataSplitter.TRAINING_DATA)
         arti = mock.Mock('AIBuilder.AbstractAI')
 
         # mock training model
@@ -366,6 +366,124 @@ class TestDataSplitterBuilder(unittest.TestCase):
 
         self.assertEqual(2, len(split_evaluation_data))
         self.assertEqual(8, len(split_training_data))
+
+
+class TestCategoricalDataSplitter(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.arti = AI('test', 'test2')
+
+        data = {'col1': [1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                'col2': ['train', 'eval', 'train', 'eval', 'eval', 'train1', 'eval', 'train', 'train', 'train1']}
+
+        self.dataframe = pd.DataFrame(data=data)
+
+    def test_build_training_data(self):
+        builder = CategoricalDataSplitter(data_source='training', column_name='col2',
+                                          training_categories=['train', 'train1'])
+
+        training_model = DataModel(self.dataframe)
+        self.arti.set_training_data(training_model)
+
+        self.arti = builder.build(ml_model=self.arti)
+
+        split_training_data = self.arti.get_training_data().get_dataframe()
+        split_evaluation_data = self.arti.get_evaluation_data().get_dataframe()
+
+        self.assertEqual(6, len(split_training_data))
+        for item in split_training_data.values:
+            self.assertTrue('train' in item[1])
+            self.assertTrue(item[0] in [1, 2, 3, 6, 8, 9, 0], f' item {item[0]} not found.')
+
+        self.assertEqual(4, len(split_evaluation_data))
+        for item in split_evaluation_data.values:
+            self.assertEqual('eval', item[1])
+            self.assertTrue(item[0] in [2, 4, 5, 7], f' item {item[0]} not found.')
+
+    def test_build_evaluation_data(self):
+        builder = CategoricalDataSplitter(data_source='evaluation', column_name='col2',
+                                          training_categories=['train', 'train1'])
+
+        evaluation_model = DataModel(self.dataframe)
+        self.arti.set_evaluation_data(evaluation_model)
+
+        self.arti = builder.build(ml_model=self.arti)
+
+        split_training_data = self.arti.get_training_data().get_dataframe()
+        split_evaluation_data = self.arti.get_evaluation_data().get_dataframe()
+
+        self.assertEqual(6, len(split_training_data))
+        for item in split_training_data.values:
+            self.assertTrue('train' in item[1])
+            self.assertTrue(item[0] in [1, 2, 3, 6, 8, 9, 0], f' item {item[0]} not found.')
+
+        self.assertEqual(4, len(split_evaluation_data))
+        for item in split_evaluation_data.values:
+            self.assertEqual('eval', item[1])
+            self.assertTrue(item[0] in [2, 4, 5, 7], f' item {item[0]} not found.')
+
+    def test_evaluation_categories(self):
+        builder = CategoricalDataSplitter(data_source='training', column_name='col2',
+                                          eval_categories=['eval'])
+
+        training_model = DataModel(self.dataframe)
+        self.arti.set_training_data(training_model)
+
+        self.arti = builder.build(ml_model=self.arti)
+
+        split_training_data = self.arti.get_training_data().get_dataframe()
+        split_evaluation_data = self.arti.get_evaluation_data().get_dataframe()
+
+        self.assertEqual(6, len(split_training_data))
+        for item in split_training_data.values:
+            self.assertTrue('train' in item[1])
+            self.assertTrue(item[0] in [1, 2, 3, 6, 8, 9, 0], f' item {item[0]} not found.')
+
+        self.assertEqual(4, len(split_evaluation_data))
+        for item in split_evaluation_data.values:
+            self.assertEqual('eval', item[1])
+            self.assertTrue(item[0] in [2, 4, 5, 7], f' item {item[0]} not found.')
+
+    def test_both_categories(self):
+        builder = CategoricalDataSplitter(data_source='training', column_name='col2',
+                                          eval_categories=['eval'], training_categories=['train', 'train1'])
+
+        training_model = DataModel(self.dataframe)
+        self.arti.set_training_data(training_model)
+
+        self.arti = builder.build(ml_model=self.arti)
+
+        split_training_data = self.arti.get_training_data().get_dataframe()
+        split_evaluation_data = self.arti.get_evaluation_data().get_dataframe()
+
+        self.assertEqual(6, len(split_training_data))
+        for item in split_training_data.values:
+            self.assertTrue('train' in item[1])
+            self.assertTrue(item[0] in [1, 2, 3, 6, 8, 9, 0], f' item {item[0]} not found.')
+
+        self.assertEqual(4, len(split_evaluation_data))
+        for item in split_evaluation_data.values:
+            self.assertEqual('eval', item[1])
+            self.assertTrue(item[0] in [2, 4, 5, 7], f' item {item[0]} not found.')
+
+    def test_missing_categories(self):
+        builder = CategoricalDataSplitter(data_source='training', column_name='col2',
+                                          eval_categories=['eval'], training_categories=['train'])
+
+        training_model = DataModel(self.dataframe)
+        self.arti.set_training_data(training_model)
+
+        with self.assertRaises(AssertionError):
+            self.arti = builder.build(ml_model=self.arti)
+
+    def test_no_categories(self):
+        builder = CategoricalDataSplitter(data_source='training', column_name='col2')
+
+        training_model = DataModel(self.dataframe)
+        self.arti.set_training_data(training_model)
+
+        with self.assertRaises(AssertionError):
+            self.arti = builder.build(ml_model=self.arti)
 
 
 class TestFeatureColumnBuilder(unittest.TestCase):

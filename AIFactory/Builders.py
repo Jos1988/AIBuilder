@@ -8,9 +8,10 @@ from AIBuilder.AIFactory.Specifications import ConfigDescriber, PrefixedDictSpec
 from AIBuilder.AIFactory.smartCache.SmartCache import smart_cache
 from AIBuilder.Data import DataModel, DataLoader, DataSetSplitter
 import tensorflow as tf
+import pandas as pd
 import AIBuilder.InputFunctionHolder as InputFunctionHolder
 import numpy as np
-from typing import Optional
+from typing import Optional, List
 from AIBuilder.AIFactory.Specifications import DataTypeSpecification, TypeSpecification, \
     NullSpecification, RangeSpecification, Descriptor, FeatureColumnsSpecification
 from AIBuilder.AI import AbstractAI
@@ -149,9 +150,16 @@ class DataBuilder(Builder):
 
 
 class DataSplitterBuilder(Builder):
+    TRAINING_DATA = 'training'
+    EVALUATION_DATA = 'evaluation'
 
-    def __init__(self, random_seed: int = None):
+    def __init__(self, data_source: str = None, random_seed: int = None):
         super().__init__()
+        self.data_source = NullSpecification('data_source')
+        if data_source is not None:
+            self.data_source = TypeSpecification(name='data_source',
+                                                 value=data_source,
+                                                 valid_types=[self.TRAINING_DATA, self.EVALUATION_DATA])
         self.randomize = DataTypeSpecification('splitter_randomize', False, bool)
         self.seed = NullSpecification('splitter_seed')
         if random_seed is not None:
@@ -164,11 +172,20 @@ class DataSplitterBuilder(Builder):
         df = df.sample(frac=1, random_state=seed)
         data.set_dataframe(df)
 
+    def select_data(self, neural_net: AbstractAI) -> DataModel:
+        if self.data_source() == self.TRAINING_DATA:
+            data = neural_net.get_training_data()
+        elif self.data_source() == self.EVALUATION_DATA:
+            data = neural_net.get_evaluation_data()
+        else:
+            raise RuntimeError('Unknown data_source ({}) found in data splitter builder.'.format(self.data_source()))
+        return data
+
 
 class NullDataSplitterBuilder(DataSplitterBuilder):
 
     def __init__(self, random_seed: int = None):
-        super().__init__(random_seed)
+        super().__init__(None, random_seed)
 
     def validate(self):
         pass
@@ -203,9 +220,7 @@ class NullDataSplitterBuilder(DataSplitterBuilder):
         return ml_model
 
 
-class EvalDataSplitterBuilder(DataSplitterBuilder):
-    TRAINING_DATA = 'training'
-    EVALUATION_DATA = 'evaluation'
+class RandomDataSplitter(DataSplitterBuilder):
 
     def __init__(self, evaluation_data_perc: int, data_source: str, random_seed: Optional[int] = None):
         """ Splits data already set on the ml model, using either the training data or evaluation data as source.
@@ -217,16 +232,13 @@ class EvalDataSplitterBuilder(DataSplitterBuilder):
         :param random_seed:          If set, seed will be used to shuffle the data before splitting, run multiple
                                      models with different seeds to achieve k-fold evaluation.
         """
-        super().__init__(random_seed)
+        super().__init__(data_source, random_seed)
         self.randomize = DataTypeSpecification('splitter_randomize', False, bool)
         self.seed = NullSpecification('splitter_seed')
         if random_seed is not None:
             self.randomize = DataTypeSpecification('splitter_randomize', True, bool)
             self.seed = DataTypeSpecification('splitter_seed', random_seed, int)
 
-        self.data_source = TypeSpecification(name='data_source',
-                                             value=data_source,
-                                             valid_types=[self.TRAINING_DATA, self.EVALUATION_DATA])
         self.evaluation_data_perc = RangeSpecification(name='evaluation_data_perc',
                                                        value=evaluation_data_perc,
                                                        min_value=0,
@@ -274,6 +286,89 @@ class EvalDataSplitterBuilder(DataSplitterBuilder):
         return data
 
 
+class CategoricalDataSplitter(DataSplitterBuilder):
+    TRAINING_DATA = 'training'
+    EVALUATION_DATA = 'evaluation'
+
+    def __init__(self, data_source: str, column_name: str, training_categories: List[str] = None,
+                 eval_categories: List[str] = None, verbosity: int = 0):
+        """ Splits data already set on the ml model, using either the training data or evaluation data as source.
+        The respective data is split using categories from a given column
+
+        :param data_source:          Data used to split.
+        """
+        super().__init__(data_source, None)
+        self.verbosity = verbosity
+        self.data_source = TypeSpecification(name='data_source',
+                                             value=data_source,
+                                             valid_types=[self.TRAINING_DATA, self.EVALUATION_DATA])
+
+        self.column_name = DataTypeSpecification(name='column_name', value=column_name, data_type=str)
+        self.training_categories = NullSpecification('training_categories')
+        if training_categories is not None:
+            self.training_categories = DataTypeSpecification('training_categories', training_categories, list)
+
+        self.eval_categories = NullSpecification('eval_categories')
+        if eval_categories is not None:
+            self.eval_categories = DataTypeSpecification('eval_categories', eval_categories, list)
+
+    @property
+    def dependent_on(self) -> list:
+        return [
+            self.DATA_MODEL,  # Need data to split
+            self.SCRUBBER,  # Scrub data as one data set because m_hot column scrubber adds new columns based on
+        ]  # data in the current set.
+
+    @property
+    def builder_type(self) -> str:
+        return self.DATA_SPLITTER
+
+    def validate(self):
+        self.validate_specifications()
+
+    @smart_cache
+    def build(self, ml_model: AbstractAI) -> AbstractAI:
+        data_model = self.select_data(ml_model)
+        df = data_model.get_dataframe()
+
+        training_cats = self.training_categories()
+        eval_cats = self.eval_categories()
+        all_cats = df[self.column_name()].unique()
+
+        eval_cats, training_cats = self.set_categories(all_cats, eval_cats, training_cats)
+
+        training_data = df[df[self.column_name()].isin(training_cats)]
+        ml_model.set_training_data(self.load_data(data_model, training_data))
+
+        evaluation_data = df[df[self.column_name()].isin(eval_cats)]
+        ml_model.set_evaluation_data(self.load_data(data_model, evaluation_data))
+
+        if self.verbosity > 0:
+            print(f'{len(training_data)} items in training data.')
+            print(f'{len(evaluation_data)} items in evaluation data.')
+
+        return ml_model
+
+    @staticmethod
+    def set_categories(all_cats, eval_cats, training_cats):
+        assert training_cats is not None or eval_cats is not None, 'Categories for either training or evaluation ' \
+                                                                   'data must be set.'
+        if training_cats is None:
+            training_cats = [cat for cat in all_cats if cat not in eval_cats]
+        if eval_cats is None:
+            eval_cats = [cat for cat in all_cats if cat not in training_cats]
+        assert set(training_cats + eval_cats) == set(all_cats), f'Some categories are unaccounted for found: ' \
+                                                                f'{training_cats + eval_cats}, need {all_cats}'
+        return eval_cats, training_cats
+
+    @staticmethod
+    def load_data(data_model: DataModel, new_data: pd.DataFrame) -> DataModel:
+        new_data_model = deepcopy(data_model)
+        new_data_model.set_dataframe(new_data)
+
+        return new_data_model
+
+
 class EstimatorBuilder(Builder):
     estimator = None
     estimator_type = None
@@ -294,7 +389,7 @@ class EstimatorBuilder(Builder):
 
         self.kwargs = NullSpecification('kwargs')
         if kwargs is not None:
-            self.kwargs = DataTypeSpecification('kwargs', kwargs, dict)
+            self.kwargs = PrefixedDictSpecification('kwargs', 'est', kwargs)
 
     @staticmethod
     def set_config(config_kwargs, kwargs):

@@ -4,6 +4,7 @@ import tensorflow as tf
 
 
 class Describer:
+    """ Can describe itself by loading its spec descriptions into self.description (dict). """
 
     def describe(self):
         description = {}
@@ -24,6 +25,7 @@ class Describer:
 
 
 class Specification(ABC):
+    """ Can be wrapped around a class value to include it in the class description. """
 
     def __init__(self, name: str, value):
         self.name = name
@@ -64,6 +66,8 @@ class RangeSpecification(Specification):
 
 
 def is_primitive(var):
+    """ todo: move logic on if and how different types are described to pattern and hook up to describer instead of
+            specification. """
     return isinstance(var, (int, float, bool, str, dict, list))
 
 
@@ -180,6 +184,7 @@ class FeatureColumnsSpecification(Specification):
 
 # todo: move implementation from abstraction module?
 class ConfigDescriber(tf.estimator.RunConfig):
+    """ Wrapper around estimator config so we can describe it. """
     description: str
 
     def __init__(self, **kwargs):

@@ -174,8 +174,8 @@ class DataModel:
 
         return self._dataframe[self.target_column_name]
 
-    def set_weight_column(self, target_column_name: str):
-        self.weight_column_name = target_column_name
+    def set_weight_column(self, weight_column_name: str):
+        self.weight_column_name = weight_column_name
 
     def get_weight_column(self):
         self.validate_columns([self.weight_column_name])

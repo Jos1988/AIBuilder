@@ -1,5 +1,6 @@
 import itertools
 import string
+import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Union, Optional
@@ -415,6 +416,7 @@ class AndScrubber(Scrubber):
             scrubber.update_metadata(meta_data=data_model.metadata)
             self.console_printer.line('  - Scrubbing: ' + scrubber.__class__.__name__)
             scrubber.scrub(data_model)
+
             if len(data_model.get_dataframe()) == 0:
                 raise DataException('All rows have been scrubbed from DataFrame.')
 
@@ -512,7 +514,8 @@ class BlacklistTokenScrubber(Scrubber):
         self.column_name = DataTypeSpecification('blackltoken column_name', column_name, str)
         self.verbosity = verbosity
         self.use_synonyms = DataTypeSpecification('blackltoken use synonyms', use_synonyms, bool)
-        self.min_syntactic_distance = DataTypeSpecification('blackltoken min syntactic distance', min_syntactic_distance, float)
+        self.min_syntactic_distance = DataTypeSpecification('blackltoken min syntactic distance',
+                                                            min_syntactic_distance, float)
         self.used_blacklist = self.blacklist()
 
         if self.use_synonyms():
@@ -913,8 +916,12 @@ class TokenizeScrubber(ConvertToColumnScrubber):
                          **kwargs)
 
 
-class HTMLScrubber(Scrubber):
-    """ Removes html from text column by '<' and '>' and everything in between. """
+class CodeScrubber(Scrubber):
+    """ Removes code
+        - Removes html from text column by '<' and '>' and everything in between.
+        - Removes js from text by '{' and '}' and everything in between
+        - Removes js from text by '$(' and ');' and everything in between
+    """
 
     def __init__(self, text_column: str, new_text_column: Optional[str] = None, verbosity: int = 0):
         self.text_column = DataTypeSpecification('html_text_column', text_column, str)
@@ -935,13 +942,20 @@ class HTMLScrubber(Scrubber):
 
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
-        html_remover = re.compile('<.*?>')
+        html_remover = re.compile('<[^>]*>')
+        js_remover = re.compile('{([^}])*}')
+        js2_remover = re.compile("[\$\(].*?[\)\;]")
+
+        def clean(text: str):
+            # text = re.sub(js_remover, ' ', text)
+            # text = re.sub(js2_remover, ' ', text)
+            return re.sub(html_remover, ' ', text)
 
         if self.verbosity() > 0:
             tqdm.pandas()
-            df[self.new_text_column()] = df[self.text_column()].progress_apply(lambda text: re.sub(html_remover, ' ', text))
+            df[self.new_text_column()] = df[self.text_column()].progress_apply(lambda text: clean(text))
         else:
-            df[self.new_text_column()] = df[self.text_column()].apply(lambda text: re.sub(html_remover, ' ', text))
+            df[self.new_text_column()] = df[self.text_column()].apply(lambda text: clean(text))
 
         data_model.set_dataframe(df)
 
@@ -1008,7 +1022,6 @@ class LowerTextScrubber(Scrubber):
 
     def scrub(self, data_model: DataModel) -> DataModel:
         df = data_model.get_dataframe()
-
         if self.verbosity() > 0:
             tqdm.pandas()
             df[self.new_text_column()] = df[self.text_column()].progress_apply(
@@ -1116,7 +1129,7 @@ class TextVectorizer(Scrubber):
     """
 
     def __init__(self, token_column: str, vector_column: str, use_existing_model: bool = False,
-                 model_file: Optional[Path] = None, **kwargs):
+                 model_file: Optional[Path] = None, verbosity: int = 0, **kwargs):
         """
         Args:
             token_column: Column in data that contains tokenized text.
@@ -1132,6 +1145,7 @@ class TextVectorizer(Scrubber):
         self.kwargs = PrefixedDictSpecification('word2vecArgs', 'w2v', kwargs)
         self.use_existing_model = DataTypeSpecification('use_existing_model', use_existing_model, bool)
         self.model_file_spec = NullSpecification('model_file')
+        self.verbosity = verbosity
         self.Word2Vec_model = None
         self.word_vectors = []
         if use_existing_model:
@@ -1149,15 +1163,17 @@ class TextVectorizer(Scrubber):
         pass
 
     def scrub(self, data_model: DataModel) -> DataModel:
+        # reset word_vectors in between scrubs.
+        self.word_vectors = []
         df = data_model.get_dataframe()
         corpus = list(df[self.token_column()])
 
-        if self.Word2Vec_model is None:
+        if self.use_existing_model():
             # only runs when first time scrub is called.
-            if self.use_existing_model():
+            if self.Word2Vec_model is None:
                 self.Word2Vec_model = KeyedVectors.load_word2vec_format(str(self.model_file.absolute()), binary=True)
-            else:
-                self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
+        else:
+            self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
 
         self.load_word_vectors(corpus)
         vector_column_names = [self.vector_column() + '_' + str(number) for number in range(len(self.word_vectors[0]))]
@@ -1169,21 +1185,42 @@ class TextVectorizer(Scrubber):
         return data_model
 
     def load_word_vectors(self, corpus: list):
+
+        total_tokens = 0
+        total_rows = len(corpus)
+        row_count = 0
+
         if self.Word2Vec_model is None:
             raise RuntimeError('Word2Vec model needs to be trained.')
 
+        zero_vector = []
         for tokens in tqdm(corpus):
             assert type(tokens) is list, f'tokens not list but {type(tokens)}, {tokens}.'
             tokens = [token for token in tokens if token in self.Word2Vec_model.wv]
 
+            if self.verbosity > 0:
+                total_tokens += len(tokens)
+                row_count += 1
+                if row_count == total_rows:
+                    print(f'Average number of words per row: {total_tokens/total_rows}.')
+
             if len(tokens) is 0:
-                raise DataException(f'Row in data has no words to vectorize.')
+                warnings.warn('Row in data has no words to vectorize.')
+                self.word_vectors.append(zero_vector)
+                continue
+
+            if len(zero_vector) is 0:
+                zero_vector = self._create_zero_vector(tokens)
 
             vectors = self.Word2Vec_model[tokens]
             vectors = np.array(vectors)
             avg_vector = np.average(vectors, axis=0)
 
             self.word_vectors.append(avg_vector)
+
+    @staticmethod
+    def _create_zero_vector(tokens):
+        return [0] * len(tokens)
 
 
 class ColumnBinner(Scrubber):
@@ -1234,7 +1271,8 @@ class CategoryByKeywordsFinder(ConvertToColumnScrubber):
         self.verbosity = verbosity
         self.multiple_cats = DataTypeSpecification('cat_key multiple cats', multiple_cats, bool)
         self.use_synonyms = DataTypeSpecification('cat_key use synonyms', use_synonyms, bool)
-        self.min_syntactic_distance = DataTypeSpecification('cat_key min syntactic distance', min_syntactic_distance, float)
+        self.min_syntactic_distance = DataTypeSpecification('cat_key min syntactic distance', min_syntactic_distance,
+                                                            float)
 
         if self.use_synonyms():
             synonym_loader = SynonymLoader(min_syntactic_distance=self.min_syntactic_distance(),
@@ -1310,9 +1348,10 @@ class BinaryResampler(Scrubber):
 
 class DataRowMerger(Scrubber):
     """ Merges rows with different values of a given attribute in order to cancel out the effects of this attribute. """
-    #TODO: refactor to be easier to understand, use multiple classes.
-    #TODO: fine tune algorithm
-    #TODO: implement verbosity
+
+    # TODO: refactor to be easier to understand, use multiple classes.
+    # TODO: fine tune algorithm
+    # TODO: implement verbosity
 
     def __init__(self, group_by: str, spread_by: str, group_size: int):
         self.group_by = DataTypeSpecification('group_by', group_by, str)

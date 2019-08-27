@@ -9,7 +9,7 @@ from AIBuilder.DataScrubbing import MissingDataReplacer, StringToDateScrubber, A
     ConvertCurrencyScrubber, AndScrubber, OutlierScrubber, MakeCategoricalScrubber, MultipleCatToListScrubber, \
     MultipleCatListToMultipleHotScrubber, BlacklistCatScrubber, ConvertToColumnScrubber, CategoryToFloatScrubber, \
     CategoryByKeywordsFinder, MissingDataScrubber, ConvertToNumericScrubber, BinaryResampler, UnbalancedDataStrategy, \
-    BlacklistTokenScrubber, HTMLScrubber, PunctuationScrubber, StopWordScrubber, LowerTextScrubber, \
+    BlacklistTokenScrubber, CodeScrubber, PunctuationScrubber, StopWordScrubber, LowerTextScrubber, \
     WordStemmer
 
 
@@ -814,7 +814,10 @@ class testHTMLScrubber(unittest.TestCase):
     def setUp(self):
         data = {'text': ['<p>this is some text</p>',
                          '<h1 id="bla", class="blabla", style="transform: translatyeY(-50%)">this is some more text</h1>',
-                         '<p>and even <b>more</b> text, damn</p>']
+                         '<p>and even <b>more</b> text, damn</p>',
+                         'this is my text (dont remove this)',
+                         "this is some text,  $('span#TrackingJobBody a').each(function (i, v) { if ($(v).attr('href')) { var href = $(v).attr('href').toLowerCase(); if (href.match(\"^http\")) { switch (true) { case /facebook/.test(href): $(v).attr('mns_rt', 'NonJob-Facebook'); break; case /linkedin/.test(href): $(v).attr('mns_rt', 'NonJob-Linkedin'); break; case /twitter\.com/.test(href): $(v).attr('mns_rt', 'NonJob-Twitter'); break; case /plus\.google\.com/.test(href): $(v).attr('mns_rt', 'NonJob-GooglePlus'); break; case /youtube/.test(href): $(v).attr('data-track', 'Client-Social-Youtube'); break; case /http[s]?\:\/\/([a-z0-9\-\.]{1,}\.[a-z]{2,})[\/]?$/.test(href): $(v).attr('data-track', 'Client-Link-Homepage'); break; default: $(v).attr('mns_rt', 'jobcustomapplyonline'); break; } } } });"
+                         ]
                 }
 
         metadata = MetaData()
@@ -823,7 +826,7 @@ class testHTMLScrubber(unittest.TestCase):
         self.data_model.metadata = metadata
 
     def testHTMLRemoval(self):
-        scrubber = HTMLScrubber('text')
+        scrubber = CodeScrubber('text')
         scrubber.scrub(self.data_model)
 
         df = self.data_model.get_dataframe()
@@ -831,14 +834,17 @@ class testHTMLScrubber(unittest.TestCase):
             self.validate_string(text)
 
     def validate_string(self, text):
+        print(text)
         self.assertFalse('>' in text)
         self.assertFalse('<' in text)
+        self.assertFalse('{' in text)
         self.assertFalse('bla' in text)
         self.assertFalse('transform' in text)
         self.assertFalse('50%' in text)
+        self.assertTrue('dont remove this' in text)
 
     def testHTMLRemoval_verbose(self):
-        scrubber = HTMLScrubber('text', verbosity=1)
+        scrubber = CodeScrubber('text', verbosity=1)
         scrubber.scrub(self.data_model)
 
         df = self.data_model.get_dataframe()
@@ -846,7 +852,7 @@ class testHTMLScrubber(unittest.TestCase):
             self.validate_string(text)
 
     def testHTMLRemoval_new_col(self):
-        scrubber = HTMLScrubber(text_column='text', new_text_column='new')
+        scrubber = CodeScrubber(text_column='text', new_text_column='new')
         scrubber.scrub(self.data_model)
 
         df = self.data_model.get_dataframe()
