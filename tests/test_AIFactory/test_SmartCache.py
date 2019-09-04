@@ -180,14 +180,14 @@ class TestSmartCacheManager(unittest.TestCase):
 class SomethingCalculatorTestClass:
 
     def __init__(self):
-        self.counter = 0
+        self.fn_called = 0
 
     @smart_cache
-    def return_something(self, count):
-        count += 3
-        self.counter += 2
+    def return_something(self, input: int):
+        self.fn_called += 1
+        output = input + 1
 
-        return self.counter
+        return output
 
 
 class TestCaching(unittest.TestCase):
@@ -201,17 +201,35 @@ class TestCaching(unittest.TestCase):
         smart_cache_manager.add_request_instructions(self.subject, 'return_something', instructions=instructions)
 
     def test_cache(self):
-        count = 0
-        self.assertEqual(2, self.subject.return_something(count))
+        self.assertEqual(2, self.subject.return_something(1))
+        self.assertEqual(4, self.subject.return_something(3))
+        self.assertEqual(None, self.subject.return_something(1))
+        self.assertEqual(2, self.subject.return_something(8))
+        self.assertEqual(2, self.subject.return_something(9))
+        self.assertEqual(2, self.subject.return_something(10))
+        self.assertEqual(2, self.subject.fn_called)
 
-        self.assertEqual(4, self.subject.return_something(count))
 
-        self.assertEqual(None, self.subject.return_something(count))
+class TestFunctionCaching(unittest.TestCase):
 
-        self.assertEqual(2, self.subject.return_something(count))
+    def setUp(self) -> None:
 
-        self.assertEqual(2, self.subject.return_something(count))
+        def argument_hash_fn(*args, **kwargs):
+            return (args[1:],) + tuple(sorted(kwargs.items()))
 
-        self.assertEqual(2, self.subject.return_something(count))
+        payload = {'argument_hash_fn': argument_hash_fn}
 
-        self.assertEqual(4, self.subject.counter)
+        instructions = InstructionSet(Instruction(Instruction.FUNCTION_CACHE, lambda x: x == 0, payload),
+                                      Instruction(Instruction.FUNCTION_CACHE, lambda x: x > 0, payload))
+
+        self.subject = SomethingCalculatorTestClass()
+        smart_cache_manager.add_request_instructions(self.subject, 'return_something', instructions=instructions)
+
+    def test_cache(self):
+        self.assertEqual(1, self.subject.return_something(0))
+        self.assertEqual(3, self.subject.return_something(2))
+        self.assertEqual(1, self.subject.return_something(0))
+        self.assertEqual(3, self.subject.return_something(2))
+        self.assertEqual(4, self.subject.return_something(3))
+        self.assertEqual(4, self.subject.return_something(3))
+        self.assertEqual(3, self.subject.fn_called)

@@ -180,3 +180,6 @@ class AI(AbstractAI):
 
     def set_estimator(self, estimator: tf.estimator):
         self.estimator = estimator
+
+    def __hash__(self):
+        return hash(str(self.description))

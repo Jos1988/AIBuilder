@@ -16,17 +16,25 @@ class Instruction:
     # INSTRUCTIONS
     WARM_CACHE = 'warm'
     LOAD_CACHE = 'load'
+    FUNCTION_CACHE = 'function_cache'
     NO_EXECUTION = 'no execution'
     NO_CACHE = 'no cache'
 
-    valid_instructions = [WARM_CACHE, LOAD_CACHE, NO_EXECUTION, NO_CACHE]
+    valid_instructions = [WARM_CACHE, LOAD_CACHE, NO_EXECUTION, NO_CACHE, FUNCTION_CACHE]
 
-    def __init__(self, instruction: str, instruction_condition: callable):
+    def __init__(self, instruction: str, instruction_condition: callable, payload=None):
+        """
+        Args:
+            instruction: Valid instruction.
+            instruction_condition: callable that takes the call number (int) and returns whether this instructions is
+            valid for the respective call number (bool)
+        """
         if instruction not in self.valid_instructions:
             raise RuntimeError(f'"{instruction}" is not a valid instruction.')
 
         self.instruction_condition = instruction_condition
         self.instruction = instruction
+        self.payload = payload
         self.times_called = 0
 
     def validate_call_count(self, call_count: int) -> bool:
@@ -216,6 +224,9 @@ smart_cache_manager = SmartCacheManager(instruction_repo=InstructionsRepository(
 
 
 def smart_cache(fn):
+
+    function_cache = {}
+
     @functools.wraps(fn)
     def fn_wrapper(*args, **kwargs):
         if False is isinstance(smart_cache_manager, SmartCacheManager):
@@ -231,18 +242,40 @@ def smart_cache(fn):
             return fn(*args, **kwargs)
 
         instruction = smart_cache_manager.get_instruction(args[0], fn.__name__)
-        instruction = instruction.instruction
-        if instruction is Instruction.NO_EXECUTION:
+        # instruction = instruction.instruction
+        if instruction.instruction is Instruction.NO_EXECUTION:
             if smart_cache_manager.verbosity > 0:
                 print('smart cache: skipping.')
             return None
 
-        if instruction is Instruction.NO_CACHE:
+        if instruction.instruction is Instruction.NO_CACHE:
             if smart_cache_manager.verbosity > 1:
                 print('smart cache: no caching.')
             return fn(*args, **kwargs)
 
-        if instruction is Instruction.WARM_CACHE:
+        if instruction.instruction is Instruction.FUNCTION_CACHE:
+            if smart_cache_manager.verbosity > 0:
+                print('smart cache: function cache')
+
+            if 'argument_hash_fn' not in instruction.payload:
+                raise RuntimeError(f'function cache requires argument_hash_fn in payload.')
+
+            argument_hash_fn = instruction.payload['argument_hash_fn']
+            key = argument_hash_fn(*args, **kwargs)
+            if key in function_cache:
+                if smart_cache_manager.verbosity > 1:
+                    print(f'load {key} from fn cache.')
+
+                return deepcopy(function_cache[key])
+
+            output = fn(*args, **kwargs)
+            if output is None:
+                raise RuntimeError('"None" output encountered, not a valid caching value.')
+
+            function_cache[key] = deepcopy(output)
+            return output
+
+        if instruction.instruction is Instruction.WARM_CACHE:
             if smart_cache_manager.verbosity > 0:
                 print('smart cache: warms cache')
             output = fn(*args, **kwargs)
@@ -250,11 +283,11 @@ def smart_cache(fn):
             smart_cache_manager.set_cache(args[0], fn.__name__, method_output=output)
             return output
 
-        if instruction is Instruction.LOAD_CACHE:
+        if instruction.instruction is Instruction.LOAD_CACHE:
             if smart_cache_manager.verbosity > 0:
                 print('smart cache: load output from cache.')
             return smart_cache_manager.load_from_cache(args[0], fn.__name__)
 
-        raise RuntimeError(f'Instruction "{instruction}" not recognised.')
+        raise RuntimeError(f'Instruction "{instruction.instruction}" not recognised.')
 
     return fn_wrapper

@@ -164,46 +164,173 @@ class TestPermutationGenerator(unittest.TestCase):
         self.assertTrue(len(seen_permutations), len(expected_permutations))
 
 
-class TestCachingInstructionsLoader(unittest.TestCase):
+class TestCachingInstructionsLoaderComplex(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.builder_A = mock.Mock(name='A1', spec=Builder)
+        self.builder_A = mock.Mock(name='A', spec=Builder)
         self.builder_A.dependent_on = ['B']
         self.builder_A.builder_type = 'A'
         self.builder_A.__hash__ = mock.Mock()
         self.builder_A.__hash__.return_value = 'A'
         self.builder_A.build = mock.Mock()
 
-        self.builder_B = mock.Mock(name='B1', spec=Builder)
+        self.builder_B1 = mock.Mock(name='B1', spec=Builder)
+        self.builder_B1.dependent_on = ['C']
+        self.builder_B1.builder_type = 'B'
+        self.builder_B1.__hash__ = mock.Mock()
+        self.builder_B1.__hash__.return_value = 'B1'
+        self.builder_B1.build = mock.Mock()
+
+        self.builder_B2 = mock.Mock(name='B2', spec=Builder)
+        self.builder_B2.dependent_on = ['C']
+        self.builder_B2.builder_type = 'B'
+        self.builder_B2.__hash__ = mock.Mock()
+        self.builder_B2.__hash__.return_value = 'B2'
+        self.builder_B2.build = mock.Mock()
+
+        self.builder_C = mock.Mock(name='C', spec=Builder)
+        self.builder_C.dependent_on = ['D']
+        self.builder_C.builder_type = 'C'
+        self.builder_C.__hash__ = mock.Mock()
+        self.builder_C.__hash__.return_value = 'C'
+        self.builder_C.build = mock.Mock()
+
+        self.builder_D1 = mock.Mock(name='D1', spec=Builder)
+        self.builder_D1.dependent_on = []
+        self.builder_D1.builder_type = 'D'
+        self.builder_D1.__hash__ = mock.Mock()
+        self.builder_D1.__hash__.return_value = 'D1'
+        self.builder_D1.build = mock.Mock()
+
+        self.builder_D2 = mock.Mock(name='D2', spec=Builder)
+        self.builder_D2.dependent_on = ['E']
+        self.builder_D2.builder_type = 'D'
+        self.builder_D2.__hash__ = mock.Mock()
+        self.builder_D2.__hash__.return_value = 'D2'
+        self.builder_D2.build = mock.Mock()
+
+        self.builder_E = mock.Mock(name='E', spec=Builder)
+        self.builder_E.dependent_on = []
+        self.builder_E.builder_type = 'E'
+        self.builder_E.__hash__ = mock.Mock()
+        self.builder_E.__hash__.return_value = 'E'
+        self.builder_E.build = mock.Mock()
+
+        permutation1 = [self.builder_A, self.builder_B1, self.builder_C, self.builder_D1, self.builder_E]
+        permutation2 = [self.builder_A, self.builder_B1, self.builder_C, self.builder_D2, self.builder_E]
+        permutation3 = [self.builder_A, self.builder_B2, self.builder_C, self.builder_D1, self.builder_E]
+        permutation4 = [self.builder_A, self.builder_B2, self.builder_C, self.builder_D2, self.builder_E]
+
+        self.permutations = [permutation1, permutation2, permutation3, permutation4]
+
+        self.instructions_repo = InstructionsRepository()
+        self.call_count_log = CallCountLog()
+        self.manager = SmartCacheManager(self.instructions_repo, self.call_count_log)
+        self.loader = CachingInstructionsLoader(manager=self.manager)
+
+    def test_load_builder_models(self):
+        models = self.loader.load_builder_models(self.permutations)
+        self.assertEqual(4, len(models))
+        for permutation in models:
+            self.assertEqual(5, len(permutation))
+            for model in permutation:
+                self.assertIsInstance(model, BuilderInstructionModel)
+
+    def test_load_builder_signatures(self):
+        models = self.loader.load_builder_models(self.permutations)
+        self.loader.load_prev_builder_descriptions(models)
+        models: List[List[BuilderInstructionModel]]
+        signatures = [[model.prev_builders for model in permutation] for permutation in models]
+        self.assertEqual([['A', 'AB1', 'AB1C', 'AB1CD1', 'AB1CD1E'],
+                          ['A', 'AB1', 'AB1C', 'AB1CD2', 'AB1CD2E'],
+                          ['A', 'AB2', 'AB2C', 'AB2CD1', 'AB2CD1E'],
+                          ['A', 'AB2', 'AB2C', 'AB2CD2', 'AB2CD2E']],
+                         signatures)
+
+    def test_map_instructions_to_signatures(self):
+        models = self.loader.load_builder_models(self.permutations)
+        self.loader.load_prev_builder_descriptions(models)
+        self.loader.map_instructions_to_models(models)
+
+        expected_instructions_first_iteration = {
+            'A': 'function_cache',
+            'AB1': 'function_cache',
+            'AB2': 'function_cache',
+            'AB1C': 'function_cache',
+            'AB2C': 'function_cache',
+            'AB1CD1': 'no cache',
+            'AB1CD2': 'no cache',
+            'AB2CD1': 'no cache',
+            'AB2CD2': 'no cache',
+            'AB1CD1E': 'no cache',
+            'AB1CD2E': 'no cache',
+            'AB2CD1E': 'no cache',
+            'AB2CD2E': 'no cache',
+        }
+
+        expected_instructions_second_iteration = {
+            'A': 'function_cache',
+            'AB1': 'function_cache',
+            'AB2': 'function_cache',
+            'AB1C': 'function_cache',
+            'AB2C': 'function_cache',
+            'AB1CD1': 'no cache',
+            'AB1CD2': 'no cache',
+            'AB2CD1': 'no cache',
+            'AB2CD2': 'no cache',
+            'AB1CD1E': 'no cache',
+            'AB1CD2E': 'no cache',
+            'AB2CD1E': 'no cache',
+            'AB2CD2E': 'no cache',
+        }
+
+        for permutation in models:
+            for model in permutation:
+                print(model.builder)
+                prev_builders = model.prev_builders
+                first_iteration_instruction = model.builder_instructions.get_instruction(0).instruction
+                print(first_iteration_instruction)
+                self.assertEqual(expected_instructions_first_iteration[prev_builders], first_iteration_instruction,
+                                 f'Wrong instruction on first iteration for model: {str(model.builder.__hash__())}')
+                second_iteration_instruction = model.builder_instructions.get_instruction(1).instruction
+                print(second_iteration_instruction)
+                self.assertEqual(expected_instructions_second_iteration[prev_builders], second_iteration_instruction,
+                                 f'Wrong instruction on second iteration for model: {str(model.builder.__hash__())}')
+
+
+class TestCachingInstructionsLoaderSimple(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.builder_A = mock.Mock(name='A', spec=Builder)
+        self.builder_A.dependent_on = ['B']
+        self.builder_A.builder_type = 'A'
+        self.builder_A.__hash__ = mock.Mock()
+        self.builder_A.__hash__.return_value = 'A'
+        self.builder_A.build = mock.Mock()
+
+        self.builder_B = mock.Mock(name='B', spec=Builder)
         self.builder_B.dependent_on = ['C']
         self.builder_B.builder_type = 'B'
         self.builder_B.__hash__ = mock.Mock()
         self.builder_B.__hash__.return_value = 'B'
         self.builder_B.build = mock.Mock()
 
-        self.builder_C1 = mock.Mock(name='C', spec=Builder)
-        self.builder_C1.dependent_on = ['D']
+        self.builder_C1 = mock.Mock(name='C1', spec=Builder)
+        self.builder_C1.dependent_on = []
         self.builder_C1.builder_type = 'C'
         self.builder_C1.__hash__ = mock.Mock()
         self.builder_C1.__hash__.return_value = 'C1'
         self.builder_C1.build = mock.Mock()
 
-        self.builder_C2 = mock.Mock(name='C', spec=Builder)
-        self.builder_C2.dependent_on = ['D']
+        self.builder_C2 = mock.Mock(name='C2', spec=Builder)
+        self.builder_C2.dependent_on = []
         self.builder_C2.builder_type = 'C'
         self.builder_C2.__hash__ = mock.Mock()
         self.builder_C2.__hash__.return_value = 'C2'
         self.builder_C2.build = mock.Mock()
 
-        self.builder_D = mock.Mock(name='D1', spec=Builder)
-        self.builder_D.dependent_on = []
-        self.builder_D.builder_type = 'D'
-        self.builder_D.__hash__ = mock.Mock()
-        self.builder_D.__hash__.return_value = 'D'
-        self.builder_D.build = mock.Mock()
-
-        permutation1 = [self.builder_A, self.builder_B, self.builder_C1, self.builder_D]
-        permutation2 = [self.builder_A, self.builder_B, self.builder_C2, self.builder_D]
+        permutation1 = [self.builder_A, self.builder_B, self.builder_C1]
+        permutation2 = [self.builder_A, self.builder_B, self.builder_C2]
 
         self.permutations = [permutation1, permutation2]
 
@@ -216,7 +343,7 @@ class TestCachingInstructionsLoader(unittest.TestCase):
         models = self.loader.load_builder_models(self.permutations)
         self.assertEqual(2, len(models))
         for permutation in models:
-            self.assertEqual(4, len(permutation))
+            self.assertEqual(3, len(permutation))
             for model in permutation:
                 self.assertIsInstance(model, BuilderInstructionModel)
 
@@ -225,38 +352,38 @@ class TestCachingInstructionsLoader(unittest.TestCase):
         self.loader.load_prev_builder_descriptions(models)
         models: List[List[BuilderInstructionModel]]
         signatures = [[model.prev_builders for model in permutation] for permutation in models]
-        self.assertEqual([['A', 'AB', 'ABC1', 'ABC1D'], ['A', 'AB', 'ABC2', 'ABC2D']], signatures)
+        self.assertEqual([['A', 'AB', 'ABC1'], ['A', 'AB', 'ABC2']], signatures)
 
     def test_map_instructions_to_signatures(self):
         models = self.loader.load_builder_models(self.permutations)
         self.loader.load_prev_builder_descriptions(models)
         self.loader.map_instructions_to_models(models)
+
         expected_instructions_first_iteration = {
-            'A': 'no cache',
-            'AB': 'warm',
+            'A': 'function_cache',
+            'AB': 'function_cache',
             'ABC1': 'no cache',
-            'ABC1D': 'no cache',
             'ABC2': 'no cache',
-            'ABC2D': 'no cache'
         }
 
         expected_instructions_second_iteration = {
-            'A': 'no execution',
-            'AB': 'load',
+            'A': 'function_cache',
+            'AB': 'function_cache',
             'ABC1': 'no cache',
-            'ABC1D': 'no cache',
             'ABC2': 'no cache',
-            'ABC2D': 'no cache'
         }
 
         for permutation in models:
             for model in permutation:
                 prev_builders = model.prev_builders
                 first_iteration_instruction = model.builder_instructions.get_instruction(0).instruction
-                self.assertEqual(expected_instructions_first_iteration[prev_builders], first_iteration_instruction)
+                print(first_iteration_instruction)
+                self.assertEqual(expected_instructions_first_iteration[prev_builders], first_iteration_instruction,
+                                 f'Wrong instruction on first iteration for model: {str(model.builder.__hash__())}')
                 second_iteration_instruction = model.builder_instructions.get_instruction(1).instruction
-                self.assertEqual(expected_instructions_second_iteration[prev_builders], second_iteration_instruction)
-
+                print(second_iteration_instruction)
+                self.assertEqual(expected_instructions_second_iteration[prev_builders], second_iteration_instruction,
+                                 f'Wrong instruction on second iteration for model: {str(model.builder.__hash__())}')
 
 if __name__ == '__main__':
     unittest.main()

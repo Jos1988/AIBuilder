@@ -180,8 +180,8 @@ class CachingInstructionsLoader:
         As the builder descriptions 111 and 111222 are duplicate these processes should be cached. The first iteration
         of the duplicate series should warm the cache, the second iteration should use the cache, only at the last
         builder.
-            permutation 1 [RUN NORMALLY, RUN AND WARM CACHE, RUN NORMALLY]
-            permutation 2 [SKIP, LOAD_FROM CACHE, RUN NORMALLY]
+            permutation 1 [RUN NORMALLY, USE FUNCTION CACHE, RUN NORMALLY]
+            permutation 2 [SKIP, USE FUNCTION CACHE, RUN NORMALLY]
 
     """
 
@@ -269,16 +269,15 @@ class CachingInstructionsLoader:
         def after_first_iteration(iteration: int) -> bool:
             return iteration > 0
 
-        for model in series_of_builders[:-1]:
-            skip = InstructionSet(Instruction(Instruction.NO_CACHE, only_first_iteration),
-                                  Instruction(Instruction.NO_EXECUTION, after_first_iteration))
+        def always(iteration: int) -> bool:
+            return True
 
-            model.builder_instructions = skip
+        def hash_args(builder: Builder, model: AbstractAI):
+            return hash(model)
 
-        for model in series_of_builders[-1:]:
-            cache_output = InstructionSet(Instruction(Instruction.WARM_CACHE, only_first_iteration),
-                                          Instruction(Instruction.LOAD_CACHE, after_first_iteration))
-
+        for model in series_of_builders:
+            payload = {'argument_hash_fn': hash_args}
+            cache_output = InstructionSet(Instruction(Instruction.FUNCTION_CACHE, always, payload))
             model.builder_instructions = cache_output
 
     def _previous_builders_unique(self, model: BuilderInstructionModel) -> bool:
@@ -307,7 +306,7 @@ class CachingInstructionsLoader:
 
 
 class AIFactory:
-    _builder_permutations: List[List[Builder]]
+    builder_permutations: List[List[Builder]]
 
     def __init__(self, builders: List[Builder], project_name: str, log_dir: str, dispatcher: Dispatcher,
                  cache: bool = True):
@@ -320,9 +319,9 @@ class AIFactory:
         self.caching_instruction_loader = CachingInstructionsLoader(manager=smart_cache_manager)
 
         self._add_observers()
-        self._builder_permutations = self.load_permutations(builders)
+        self.builder_permutations = self.load_permutations(builders)
         if cache:
-            self.caching_instruction_loader.set_caching_instructions(self._builder_permutations)
+            self.caching_instruction_loader.set_caching_instructions(self.builder_permutations)
 
     def load_permutations(self, builders):
         builder_permutations = self.permutation_generator.generate(builders=builders)
@@ -332,13 +331,21 @@ class AIFactory:
         self.dispatcher.addObserver(PreBuilderObserver())
 
     def count_remaining_models(self):
-        return len(self._builder_permutations)
+        return len(self.builder_permutations)
 
     def has_next_ai(self):
         return self.count_remaining_models() is not 0
 
+    def preview_final_description(self) -> dict:
+        next_builder_permutation = self.builder_permutations[-1:][0]
+        final_description = {}
+        for builder in next_builder_permutation:
+            final_description[builder.builder_type] = builder.describe()
+
+        return final_description
+
     def create_next_ai(self):
-        next_builder_permutation = self._builder_permutations.pop()
+        next_builder_permutation = self.builder_permutations.pop()
 
         return self.create_AI(next_builder_permutation)
 
@@ -355,12 +362,15 @@ class AIFactory:
                 # overwrite old name from being loaded from cache.
                 ml_model.set_name(name)
 
-            ml_model = builder.build(ml_model)
+            result = builder.build(ml_model)
+            if result is not None:
+                # Result will be None if cache prevents execution, keep using the old model as it has the description,
+                # which is required for determining function cache key.
+                # todo: fix this, we should not be passing a model just because the cache needs the description.
+                ml_model = result
 
-            builder_description = builder.describe()
-            description[builder.builder_type] = builder_description
-
-        ml_model.description = description
+            description[builder.builder_type] = builder.describe()
+            ml_model.description = description
 
         return ml_model
 
