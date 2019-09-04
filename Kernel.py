@@ -79,11 +79,20 @@ class Kernel:
         pre_run_event = TesterEvent(event_name=KernelDispatcher.PRE_RUN, session=self.session, tester=self.tester)
         self.dispatcher.dispatch(pre_run_event)
         while self.factory.has_next_ai():
-            self.doCreateModel()
-
-            if not self.tester.is_unique():
+            #todo: move the new is unique logic somewhere else and changing sequence of operation seems to difficult, smell?
+            final_description = self.preview_model_description()
+            final_description_hash = AITester.stable_hash_description(self.preview_model_description())
+            log_dir_path = self.factory.log_dir
+            if not AITester.is_hash_unique_to_report(log_dir_path=log_dir_path, description_hash=final_description_hash):
+                self.factory.builder_permutations.pop()
+                #todo: some kind of null model, as it is just used to pervey name and log dir?
+                model = AI(self.factory.project_name, self.factory.log_dir, self.factory.project_name + '_X')
+                model.description = final_description
+                self.tester.ml_model = model
                 self.ModelNotUnique()
                 continue
+
+            self.doCreateModel()
 
             if self.train:
                 self.doTrainModel()
@@ -122,6 +131,9 @@ class Kernel:
         not_unique_event = TesterEvent(event_name=KernelDispatcher.MODEL_NOT_UNIQUE, session=self.session,
                                        tester=self.tester)
         self.dispatcher.dispatch(not_unique_event)
+
+    def preview_model_description(self) -> dict:
+        return self.factory.preview_final_description()
 
     def doCreateModel(self):
         pre_create_event = FactoryEvent(event_name=KernelDispatcher.PRE_CREATE, session=self.session,

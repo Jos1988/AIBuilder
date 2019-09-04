@@ -369,7 +369,7 @@ class PostEvaluationLogObserver(Observer):
         event.session.summary_logger.save_logged_data()
 
     def update_report(self, event):
-        report = event.tester.get_report_file('a')
+        report = event.tester.get_report_file_from_model('a')
         report_printer = TesterPrinter(ReportPrintStrategy(report=report))
         report_printer.line('')
         report_printer.print_ai_description(

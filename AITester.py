@@ -177,13 +177,32 @@ class AITester(AbstractAITester):
         self.ml_model = ml_model
 
     def is_unique(self) -> bool:
+        log_dir_path = self.ml_model.get_log_dir()
+
+        return self.is_hash_unique_to_report(description_hash=self.description_hash, log_dir_path=log_dir_path)
+
+        # try:
+        #     report = self.get_report_file_from_model('r')
+        # except FileNotFoundError:
+        #     return True
+        #
+        # for line in report:
+        #     if -1 is not line.find(str(self.description_hash)):
+        #         report.close()
+        #         return False
+        #
+        # report.close()
+        # return True
+
+    @staticmethod
+    def is_hash_unique_to_report(log_dir_path: str, description_hash: int):
         try:
-            report = self.get_report_file('r')
+            report = AITester.get_report_file(mode='r', log_dir_path=log_dir_path)
         except FileNotFoundError:
             return True
 
         for line in report:
-            if -1 is not line.find(str(self.description_hash)):
+            if -1 is not line.find(str(description_hash)):
                 report.close()
                 return False
 
@@ -223,14 +242,20 @@ class AITester(AbstractAITester):
     def validate_test_time(self):
         assert type(self.test_time) is str, 'Test time not set in AITester.'
 
-    def get_report_file(self, mode: str):
-        path = self.ml_model.get_log_dir() + '/ai_reports.txt'
-
+    @staticmethod
+    def get_report_file(mode: str, log_dir_path: str):
+        path = log_dir_path + '/ai_reports.txt'
         if not os.path.isfile(path):
             warnings.warn(f'Reports file missing, will attempt to creating new file: "{path}".')
 
         report = open(path, mode=mode)
         return report
+
+    def get_report_file_from_model(self, mode: str):
+        path = self.ml_model.get_log_dir()
+
+        return self.get_report_file(mode, path)
+
 
     @staticmethod
     def stable_hash_description(description: dict):
