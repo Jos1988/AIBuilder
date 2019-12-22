@@ -4,6 +4,8 @@ import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Union, Optional
+from multiprocessing.pool import Pool
+from itertools import chain
 
 from gensim.models import Word2Vec, KeyedVectors
 from nltk import RegexpTokenizer, SnowballStemmer
@@ -476,6 +478,11 @@ class BlacklistCatScrubber(Scrubber):
         return data_model
 
 
+def filter_list_multi(input: tuple) -> list:
+    word_list, blacklist = input
+    return [[word for word in sentence if word.lower() not in blacklist] for sentence in word_list]
+
+
 class BlacklistTokenScrubber(Scrubber):
     """ Removes blacklisted words from list in column, does not remove rows.
 
@@ -501,8 +508,8 @@ class BlacklistTokenScrubber(Scrubber):
         - The column referred to in the 'column_name' argument should ben known to metadata as LIST_DATA_TYPE.
     """
 
-    def __init__(self, column_name: str, blacklist: List[str], verbosity: int = 0, use_synonyms: Optional[bool] = False,
-                 min_syntactic_distance: Optional[float] = 0.5):
+    def __init__(self, column_name: str, blacklist: List[str], verbosity: int = 0, processes: int = 1,
+                 use_synonyms: Optional[bool] = False, min_syntactic_distance: Optional[float] = 0.5):
         """
         Args:
             column_name: Name of column to scrub.
@@ -513,6 +520,7 @@ class BlacklistTokenScrubber(Scrubber):
         self.blacklist = DataTypeSpecification('blackltoken blacklist', blacklist, List[str])
         self.column_name = DataTypeSpecification('blackltoken column_name', column_name, str)
         self.verbosity = verbosity
+        self.processes = processes
         self.use_synonyms = DataTypeSpecification('blackltoken use synonyms', use_synonyms, bool)
         self.min_syntactic_distance = DataTypeSpecification('blackltoken min syntactic distance',
                                                             min_syntactic_distance, float)
@@ -543,7 +551,16 @@ class BlacklistTokenScrubber(Scrubber):
         def filter_list(word_list: list) -> list:
             return list(filter(lambda word: word.lower() not in self.used_blacklist, word_list))
 
-        if self.verbosity > 0:
+        if self.processes > 1:
+            batches = []
+            for word_batch in np.array_split(df[self.column_name()], self.processes):
+                batches.append((word_batch, self.blacklist()))
+
+            p = Pool(self.processes)
+            multiprocess_results: List[list] = list(p.imap(filter_list_multi, batches))
+            df[self.column_name()] = list(chain.from_iterable(multiprocess_results))
+
+        elif self.verbosity > 0:
             tqdm.pandas()
             df[self.column_name()] = df[self.column_name()].progress_apply(filter_list)
         else:
@@ -1077,13 +1094,24 @@ class StopWordScrubber(Scrubber):
         return data_model
 
 
+def stem_multi(input: tuple) -> list:
+    texts, stemmer = input
+
+    stemmed_texts = []
+    for text in texts:
+        stemmed_texts.append([stemmer.stem(word) for word in text])
+
+    return stemmed_texts
+
+
 class WordStemmer(Scrubber):
     """ Stems words in tokenized column. """
 
     def __init__(self, column: str, new_column: Optional[str] = None, verbosity: int = 0,
-                 language: str = 'english'):
+                 processes: int = 1, language: str = 'english'):
         self.column = DataTypeSpecification('stem_column', column, str)
         self.new_column = DataTypeSpecification('new_stem_column', column, str)
+        self.processes = processes
         self.verbosity = DataTypeSpecification('verbosity', verbosity, int)
         self.stopwords = stopwords.words(language)
         self.stemmer = SnowballStemmer(language)
@@ -1104,7 +1132,19 @@ class WordStemmer(Scrubber):
         df = data_model.get_dataframe()
         sentences = df[self.column()].to_list()
 
-        if self.verbosity() > 0:
+        if self.processes > 1:
+            batches = []
+            for word_batch in np.array_split(df[self.column()], self.processes):
+                batches.append((word_batch, self.stemmer))
+
+            pool = Pool(self.processes)
+            multi_process_results: List[list] = list(pool.imap(stem_multi, batches))
+            df[self.new_column()] = list(chain.from_iterable(multi_process_results))
+            data_model.set_dataframe(df)
+
+            return data_model
+
+        elif self.verbosity() > 0:
             sentences = tqdm(sentences)
 
         stemmed_sentences = []
@@ -1129,7 +1169,7 @@ class TextVectorizer(Scrubber):
     """
 
     def __init__(self, token_column: str, vector_column: str, use_existing_model: bool = False,
-                 model_file: Optional[Path] = None, verbosity: int = 0, **kwargs):
+                 average_vectors: bool = False, model_file: Optional[Path] = None, verbosity: int = 0, **kwargs):
         """
         Args:
             token_column: Column in data that contains tokenized text.
@@ -1145,9 +1185,9 @@ class TextVectorizer(Scrubber):
         self.kwargs = PrefixedDictSpecification('word2vecArgs', 'w2v', kwargs)
         self.use_existing_model = DataTypeSpecification('use_existing_model', use_existing_model, bool)
         self.model_file_spec = NullSpecification('model_file')
+        self.average_vectors = DataTypeSpecification('average_vecotrs', average_vectors, bool)
         self.verbosity = verbosity
         self.Word2Vec_model = None
-        self.word_vectors = []
         if use_existing_model:
             self.model_file_spec = DataTypeSpecification('model_file', model_file.name, str)
             self.model_file = model_file
@@ -1164,7 +1204,6 @@ class TextVectorizer(Scrubber):
 
     def scrub(self, data_model: DataModel) -> DataModel:
         # reset word_vectors in between scrubs.
-        self.word_vectors = []
         df = data_model.get_dataframe()
         corpus = list(df[self.token_column()])
 
@@ -1175,12 +1214,17 @@ class TextVectorizer(Scrubber):
         else:
             self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
 
-        self.load_word_vectors(corpus)
-        vector_column_names = [self.vector_column() + '_' + str(number) for number in range(len(self.word_vectors[0]))]
-        df[vector_column_names] = pd.DataFrame(self.word_vectors)
+        word_vectors = self.load_word_vectors(corpus)
+
+        if self.average_vectors():
+            vector_column_names = [self.vector_column() + '_' + str(number) for number in range(len(word_vectors[0]))]
+            df[vector_column_names] = pd.DataFrame(word_vectors)
+            data_model.metadata.define_numerical_columns(vector_column_names)
+        else:
+            df[self.vector_column()] = pd.Series([vectors for vectors in word_vectors])
+            data_model.metadata.define_list_columns([self.vector_column()])
 
         data_model.set_dataframe(df)
-        data_model.metadata.define_numerical_columns(vector_column_names)
 
         return data_model
 
@@ -1194,6 +1238,7 @@ class TextVectorizer(Scrubber):
             raise RuntimeError('Word2Vec model needs to be trained.')
 
         zero_vector = []
+        word_vectors = []
         for tokens in tqdm(corpus):
             assert type(tokens) is list, f'tokens not list but {type(tokens)}, {tokens}.'
             tokens = [token for token in tokens if token in self.Word2Vec_model.wv]
@@ -1202,21 +1247,24 @@ class TextVectorizer(Scrubber):
                 total_tokens += len(tokens)
                 row_count += 1
                 if row_count == total_rows:
-                    print(f'Average number of words per row: {total_tokens/total_rows}.')
+                    print(f'Average number of words per row: {total_tokens / total_rows}.')
 
             if len(tokens) is 0:
                 warnings.warn('Row in data has no words to vectorize.')
-                self.word_vectors.append(zero_vector)
+                word_vectors.append(zero_vector)
                 continue
 
             if len(zero_vector) is 0:
                 zero_vector = self._create_zero_vector(tokens)
 
             vectors = self.Word2Vec_model[tokens]
-            vectors = np.array(vectors)
-            avg_vector = np.average(vectors, axis=0)
+            result = np.array(vectors)
+            if self.average_vectors():
+                result = np.average(result, axis=0)
 
-            self.word_vectors.append(avg_vector)
+            word_vectors.append(result)
+
+        return word_vectors
 
     @staticmethod
     def _create_zero_vector(tokens):
