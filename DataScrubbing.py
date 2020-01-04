@@ -1343,6 +1343,15 @@ class CategoryByKeywordsFinder(ConvertToColumnScrubber):
                          required_columns={source_column_name: MetaData.TEXT_DATA_TYPE},
                          **kwargs)
 
+    def scrub(self, data_model: DataModel) -> DataModel:
+        data_model = super().scrub(data_model)
+        df = data_model.get_dataframe()
+        df[self.new_column_name] = df[self.new_column_name].astype('category')
+        data_model.set_dataframe(df)
+
+        return data_model
+
+
 
 class BinaryResampler(Scrubber):
     """ Resample an imbalanced dataset by a binary category. If 70% of data points is positive, for example, the dataset
