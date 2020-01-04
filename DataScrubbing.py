@@ -844,7 +844,7 @@ class MultipleCatListToMultipleHotScrubber(Scrubber):
 
 
 class ConvertToColumnScrubber(Scrubber):
-    """Create a new column and have it filled for each row by a by callable.
+    """Create a new column and have it filled by a callable.
     """
 
     def __init__(self, new_column_name: str, new_column_type: str, converter: callable, required_columns: dict,
@@ -1213,7 +1213,6 @@ class TextVectorizer(Scrubber):
                 self.Word2Vec_model = KeyedVectors.load_word2vec_format(str(self.model_file.absolute()), binary=True)
         else:
             self.Word2Vec_model = Word2Vec(corpus, **self.kwargs())
-
         word_vectors = self.load_word_vectors(corpus)
 
         if self.average_vectors():

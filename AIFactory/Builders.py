@@ -61,7 +61,7 @@ class Builder(ABC, Describer):
 class DataBuilder(Builder):
 
     def __init__(self, target_column: str, data_columns: list, data_source: str = None, eval_data_source: str = None,
-                 prediction_data_source: str = None, weight_column: str = None):
+                 prediction_data_source: str = None, weight_column: str = None, limit: int = 0):
         super().__init__()
         self.data_columns = DataTypeSpecification('columns', data_columns, list)
         self.target_column = DataTypeSpecification('target_column', target_column, str)
@@ -70,6 +70,7 @@ class DataBuilder(Builder):
         self.data_source = NullSpecification('data_source')
         self.eval_data_source = NullSpecification('eval_data_source')
         self.prediction_data_source = NullSpecification('prediction_data_source')
+        self.limit = NullSpecification('limit')
 
         if None is not data_source:
             self.data_source = DataTypeSpecification('data_source', data_source, str)
@@ -82,6 +83,9 @@ class DataBuilder(Builder):
 
         if None is not weight_column:
             self.weight_column = DataTypeSpecification('weight_column', weight_column, str)
+
+        if None is not limit:
+            self.limit = DataTypeSpecification('limit', limit, int)
 
         self.test_data = None
         self.validation_data = None
@@ -140,7 +144,7 @@ class DataBuilder(Builder):
         return data
 
     def load_file(self, data_source: str) -> DataLoader:
-        loader = DataLoader()
+        loader = DataLoader(self.limit())
 
         if 'csv' in data_source:
             loader.load_csv(data_source)

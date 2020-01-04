@@ -241,8 +241,19 @@ class DataLoader:
     _ml_data_model = DataModel
     _conserve_memory = False
 
+    def __init__(self, limit: int = None):
+        self.limit = limit
+
     def load_csv(self, path: str):
-        dataframe = pd.read_csv(path)
+        if self.limit is not None:
+            reader = pd.read_csv(path, encoding='utf-8', chunksize=self.limit)
+            dataframe = None
+            for chunk in reader:
+                dataframe = chunk
+                break
+        else:
+            dataframe = pd.read_csv(path, encoding='utf-8')
+
         self._ml_data_model = DataModel(dataframe)
 
     def filter_columns(self, columns: set):
