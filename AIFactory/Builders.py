@@ -61,7 +61,7 @@ class Builder(ABC, Describer):
 class DataBuilder(Builder):
 
     def __init__(self, target_column: str, data_columns: list, data_source: str = None, eval_data_source: str = None,
-                 prediction_data_source: str = None, weight_column: str = None, limit: int = 0):
+                 prediction_data_source: str = None, weight_column: str = None, limit: int = None):
         super().__init__()
         self.data_columns = DataTypeSpecification('columns', data_columns, list)
         self.target_column = DataTypeSpecification('target_column', target_column, str)

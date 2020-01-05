@@ -1239,7 +1239,7 @@ class TextVectorizer(Scrubber):
         zero_vector = []
         word_vectors = []
         for tokens in tqdm(corpus):
-            assert type(tokens) is list, f'tokens not list but {type(tokens)}, {tokens}.'
+            assert type(tokens) in [list, np.ndarray], f'tokens not list {type(tokens)}, {tokens}.'
             tokens = [token for token in tokens if token in self.Word2Vec_model.wv]
 
             if self.verbosity > 0:
